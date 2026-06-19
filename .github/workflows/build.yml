@@ -33,17 +33,17 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-latest
     outputs:
       artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
       has-classic: ${{ steps.check-builds.outputs.has_classic }}
       has-sciter: ${{ steps.check-builds.outputs.has_sciter }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
           arch: x64
 
@@ -136,7 +136,7 @@ jobs:
 
       - name: Upload unsigned binaries for signing
         id: upload-unsigned
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-binaries
           path: unsigned-binaries/
@@ -144,10 +144,10 @@ jobs:
 
   sign-and-release:
     needs: build
-    runs-on: windows-2022
+    runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # --- SignPath Code Signing ---
       # Tag pushes always sign (release-signing). Manual runs sign with
@@ -169,7 +169,7 @@ jobs:
 
       - name: Use unsigned binaries (signing skipped)
         if: ${{ !startsWith(github.ref, 'refs/tags/') && !inputs.sign_binaries }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: unsigned-binaries
           path: signed-binaries
@@ -249,12 +249,12 @@ jobs:
 
       - name: Attest VKey Classic
         if: startsWith(github.ref, 'refs/tags/') && needs.build.outputs.has-classic == 'true'
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: VKeyClassic.zip
 
       - name: Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           body_path: RELEASE_NOTES.md
@@ -288,7 +288,7 @@ jobs:
           token: ${{ secrets.WINGET_TOKEN }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: VKey-x64
           path: upload-payload/
