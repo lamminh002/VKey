@@ -29,8 +29,18 @@ function initUserDefinedDialog() {
     if (btnImport) btnImport.addEventListener("click", function () { triggerAction("import"); });
     if (btnExport) btnExport.addEventListener("click", function () { triggerAction("export"); });
     if (btnClose) btnClose.addEventListener("click", function () { triggerAction("close"); });
-    if (btnLoadTelex) btnLoadTelex.addEventListener("click", function () { triggerAction("load_telex"); });
-    if (btnLoadVni) btnLoadVni.addEventListener("click", function () { triggerAction("load_vni"); });
+    if (btnLoadTelex) btnLoadTelex.addEventListener("click", function () {
+        triggerAction("load_telex");
+        if (typeof showToastI18n === "function") {
+            showToastI18n("Đã nạp mẫu Telex", "Loaded Telex template");
+        }
+    });
+    if (btnLoadVni) btnLoadVni.addEventListener("click", function () {
+        triggerAction("load_vni");
+        if (typeof showToastI18n === "function") {
+            showToastI18n("Đã nạp mẫu VNI", "Loaded VNI template");
+        }
+    });
 
     if (keyAction) {
         // Switching action populates the key field with its current assignment.
@@ -62,6 +72,14 @@ function onApply() {
     document.getElementById("val-key").value = key;
     document.getElementById("val-key-action").value = action;
     triggerAction("apply");
+
+    // Toast feedback
+    var displayKey = key === " " ? "Space" : key;
+    var label = getActionLabel(action);
+    if (typeof showToastI18n === "function") {
+        showToastI18n("Đã áp dụng: " + displayKey + " -> " + label,
+                      "Applied: " + displayKey + " -> " + label);
+    }
 }
 
 function onClear() {
@@ -72,6 +90,12 @@ function onClear() {
 
     document.getElementById("val-key-action").value = action;
     triggerAction("clear_action");
+
+    // Toast feedback
+    var label = getActionLabel(action);
+    if (typeof showToastI18n === "function") {
+        showToastI18n("Đã xóa phím gán cho: " + label, "Cleared mapping for: " + label);
+    }
 }
 
 function selectKeyItem(element, key, action) {
