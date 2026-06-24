@@ -11,6 +11,7 @@
 #include "system/PendingDllApply.h"
 #include "system/ToastPopup.h"
 #include "core/Version.h"
+#include "core/WinStrings.h"
 #include "sciter/ScaleHelper.h"
 #include "sciter/SciterHelper.h"
 #include "system/DarkModeHelper.h"
@@ -584,6 +585,18 @@ bool SettingsDialog::handle_event(HELEMENT he, BEHAVIOR_EVENT_PARAMS& params) {
 }
 
 void SettingsDialog::handleToggleChange(const std::wstring& id, bool value) {
+    // Re-entrancy guard (see SettingsDialog.h::handlingToggle_). Branches below may open
+    // a modal MessageBox / UAC prompt whose nested message loop re-delivers this same
+    // VALUE_CHANGED event into handle_event → here, which would cascade duplicate dialogs
+    // (debug-log warning, TSF register box). Drop the re-entrant call. The RAII reset
+    // covers every early-return path below.
+    if (handlingToggle_) return;
+    handlingToggle_ = true;
+    struct ToggleGuard {
+        bool& flag;
+        ~ToggleGuard() { flag = false; }
+    } toggleGuard{handlingToggle_};
+
     // Map toggle IDs to settings
     if (id == L"toggle-language") {
         // V/E toggle: send to main process via cross-process message
@@ -1150,7 +1163,8 @@ void SettingsDialog::initializeUI() {
     {
         sciter::dom::element verSpan = root.find_first("#app-version-number");
         if (verSpan.is_valid()) {
-            verSpan.set_text(VKEY_VERSION_WSTR);
+            std::wstring verStr = VKEY_VERSION_WSTR L" (Build: " + GetBuildVersion(__DATE__, __TIME__) + L")";
+            verSpan.set_text(verStr.c_str());
         }
         // Also update title bar version
         sciter::dom::element titleText = root.find_first(".title-text");

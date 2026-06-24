@@ -5,6 +5,7 @@
 // No Sciter dependency. Uses HookEngine + TrayIcon + ClassicSettingsDialog.
 
 #include "core/Version.h"
+#include "core/WinStrings.h"
 #include "core/config/ConfigManager.h"
 #include "core/ipc/SharedState.h"
 #include "core/ipc/SharedStateManager.h"
@@ -219,15 +220,16 @@ static void OnMenuCommand(TrayMenuId id) {
             SpawnSettingsDialog();
             break;
 
-        case TrayMenuId::About:
+        case TrayMenuId::About: {
             // Lite build: simple MessageBox about dialog
-            MessageBoxW(nullptr,
-                L"VKey Classic\n"
-                L"Vietnamese Input Method Editor\n\n"
-                L"https://github.com/phatMT97/VKey\n\n"
-                L"Dịch vụ ký số trên Windows được cung cấp miễn phí bởi SignPath.io, chứng chỉ bởi SignPath Foundation.",
-                L"VKey", MB_ICONINFORMATION);
+            std::wstring aboutText = L"VKey Classic v" VKEY_VERSION_WSTR L"\n"
+                                     L"Vietnamese Input Method Editor\n"
+                                     L"Build: " + GetBuildVersion(__DATE__, __TIME__) + L"\n\n"
+                                     L"https://github.com/phatMT97/VKey\n\n"
+                                     L"Dịch vụ ký số trên Windows được cung cấp miễn phí bởi SignPath.io, chứng chỉ bởi SignPath Foundation.";
+            MessageBoxW(nullptr, aboutText.c_str(), L"VKey", MB_ICONINFORMATION);
             break;
+        }
 
         case TrayMenuId::ToggleMode:
             g_hookEngine.ToggleVietnameseMode();
@@ -541,6 +543,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     g_hookEngine.SetTsfModeCallback([](bool tsfActive, bool tsfReadonly) {
         g_sharedState.SetOrClearFlag(SharedFlags::TSF_ACTIVE, tsfActive);
         g_sharedState.SetOrClearFlag(SharedFlags::TSF_READONLY, tsfReadonly);
+        // Tray icon: show the colored "T" indicator while a TSF app is focused,
+        // and revert to V/E when it isn't. Deferred to the tray message thread.
+        if (HWND tsfTrayWnd = g_trayIcon.GetMessageWindow()) {
+            PostMessageW(tsfTrayWnd, WM_VKEY_TRAY_TSF_SYNC, tsfActive ? 1 : 0, 0);
+        }
         if (tsfActive && g_hookEngine.IsVietnameseMode()) {
             HWND trayWnd = g_trayIcon.GetMessageWindow();
             if (trayWnd) {
