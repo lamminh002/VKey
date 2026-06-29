@@ -25,11 +25,25 @@ if(MSVC)
     #          fold identical ones (template-emitted strings, vtables, etc.).
     #          NOT implied by /O2 and saves measurable .rdata.
     add_compile_options($<$<CONFIG:Release>:/Gy> $<$<CONFIG:Release>:/Gw>)
+    # Whole-program optimization (Release only — Debug/Linux test loop unaffected).
+    # /GL makes each TU emit IL instead of machine code; the linker (/LTCG below)
+    # then does cross-TU inlining + whole-program dead-code elimination. /GL on the
+    # static libs (VKeyEngine/VKeyCore) is REQUIRED or there is no inlining across
+    # the lib boundary into VKeyTSF/VKeyApp/VKeyLite. A /GL object forces LTCG at
+    # link time regardless, so the two flags are always paired.
+    add_compile_options($<$<CONFIG:Release>:/GL>)
+    # /GR-: RTTI is provably unused (0 dynamic_cast/typeid in src/; Sciter headers
+    # grep-clean). Strips type_info objects + RTTI COMDATs — most valuable here
+    # because of the many small polymorphic classes (IEngineRule/IFeature/IGate/
+    # injectors/proposals). If a future feature ever needs dynamic_cast, scope /GR
+    # back onto that one target rather than dropping this global strip.
+    add_compile_options($<$<CONFIG:Release>:/GR->)
     # Linker security flags: ASLR, DEP, High-Entropy ASLR
     add_link_options(/DYNAMICBASE /NXCOMPAT /HIGHENTROPYVA)
     # PE legitimacy: checksum (reduces AV false positives)
     add_link_options(/RELEASE)
     add_link_options($<$<CONFIG:Release>:/INCREMENTAL:NO>
+                     $<$<CONFIG:Release>:/LTCG>
                      $<$<CONFIG:Release>:/OPT:REF>
                      $<$<CONFIG:Release>:/OPT:ICF>)
 endif()
@@ -600,6 +614,8 @@ set(NEXTKEY_TEST_SOURCES
     tests/PerAppModeDecisionTest.cpp
     tests/WebView2CacheDecisionTest.cpp
     tests/CommitUndoExemptionTest.cpp
+    tests/CommitUndoArmDecisionTest.cpp
+    tests/PathUtilTest.cpp
     tests/DigitLedWordDecisionTest.cpp
     tests/LoggerTest.cpp
     tests/HotkeyRegistryTest.cpp
@@ -688,6 +704,12 @@ if(MSVC)
     # MSVC 14.50 toolchain promotes to error via the global /WX — allow it for
     # the test target only; production targets keep /WX fully strict.
     target_compile_options(VKeyTests PRIVATE /wd4244)
+    # VKeyTests keeps RTTI in Release. Test code (OutputInjectorFactoryTest,
+    # InjectorSwitchTest) uses dynamic_cast to assert injector concrete types;
+    # the global $<Release:/GR-> would make that C4541 "unpredictable behavior"
+    # (and /WX-fatal). Production code has zero dynamic_cast, so /GR- still ships
+    # on VKeyTSF/VKeyApp/VKeyLite — this override is test-only.
+    target_compile_options(VKeyTests PRIVATE $<$<CONFIG:Release>:/GR>)
 endif()
 
 # Put tests in separate directory; override global /SUBSYSTEM:WINDOWS
