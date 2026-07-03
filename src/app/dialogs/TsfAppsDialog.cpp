@@ -7,6 +7,7 @@
 #include "helpers/AppHelpers.h"
 #include "core/Strings.h"
 #include "core/WinStrings.h"
+#include "core/PathUtil.h"
 #include "sciter-x-dom.hpp"
 #include <algorithm>
 #include <fstream>
@@ -67,6 +68,15 @@ bool TsfAppsDialog::handle_event(HELEMENT he, BEHAVIOR_EVENT_PARAMS& params) {
                     }
                 } else if (action == L"add-current") {
                     startWindowPicking();
+                } else if (action == L"add-browse") {
+                    // Pick any exe — including system/UWP apps not in the running
+                    // list (Windows Search, Task Manager, etc.). addApp() normalizes
+                    // the path to its basename (#109 follow-up: add native apps).
+                    std::wstring picked = ShowOpenFileDialogW(
+                        get_hwnd(),
+                        L"Ứng dụng (*.exe)\0*.exe\0Tất cả (*.*)\0*.*\0",
+                        L"exe");
+                    if (!picked.empty()) addApp(picked);
                 } else if (action == L"delete") {
                     if (!appName.empty()) {
                         removeApp(appName);
@@ -114,7 +124,16 @@ void TsfAppsDialog::populateList() {
 }
 
 void TsfAppsDialog::addApp(const std::wstring& name) {
-    std::wstring lower = ToLowerAscii(name);
+    // Match key is the exe basename (the classifier compares cls->exeName). A
+    // browsed/typed full path ("C:\\Windows\\System32\\Taskmgr.exe") must be
+    // reduced to its basename or it would never match. No-op for a plain name.
+    std::wstring lower = ToLowerAscii(PathBasename(name));
+
+    // Never add VKey to its own TSF list — covers every path (manual, browse,
+    // window-picker, import). The picker also shows a message; skip silently here
+    // so a typed/browsed/imported VKey exe can't slip through. Match the Classic
+    // dialogs: block all three VKey exe names (Sciter + Lite + Classic builds).
+    if (lower == L"vkey.exe" || lower == L"vkeylite.exe" || lower == L"vkeyclassic.exe") return;
 
     // Check for duplicates
     if (std::find(appList_.begin(), appList_.end(), lower) != appList_.end()) return;
