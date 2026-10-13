@@ -7,7 +7,12 @@
 #include "core/UIConfig.h"
 #include <algorithm>
 #include <fstream>
+#include <memory>
 #include <filesystem>
+#include <chrono>
+#ifdef _WIN32
+#include <Windows.h>
+#endif
 
 namespace NextKey {
 namespace {
@@ -21,6 +26,7 @@ protected:
     void TearDown() override {
         // Clean up test file
         std::filesystem::remove(std::filesystem::path(testConfigPath_));
+        std::filesystem::remove(std::filesystem::path(testConfigPath_ + L".lastgood"));
     }
     
     void WriteTestConfig(const std::string& content) {
@@ -31,6 +37,243 @@ protected:
     
     std::wstring testConfigPath_;
 };
+
+// Use an isolated directory so recovery files cannot leak between tests.
+class ConfigRecoveryTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        dir_ = std::filesystem::temp_directory_path() /
+            ("vkey-config-recovery-" + std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count()));
+        ASSERT_TRUE(std::filesystem::create_directory(dir_));
+        path_ = (dir_ / "config.toml").wstring();
+    }
+
+    void TearDown() override {
+        std::error_code ec;
+        std::filesystem::remove_all(dir_, ec);
+    }
+
+    void Write(const std::wstring& path, const std::string& content) {
+        std::ofstream file(std::filesystem::path(path), std::ios::binary);
+        file << content;
+        file.close();
+        ASSERT_FALSE(file.fail());
+    }
+
+    std::string Read(const std::wstring& path) {
+        std::ifstream file(std::filesystem::path(path), std::ios::binary);
+        return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+    }
+
+    void SaveVni() {
+        TypingConfig config;
+        config.inputMethod = InputMethod::VNI;
+        config.spellCheckEnabled = false;
+        ASSERT_TRUE(ConfigManager::SaveToFile(path_, config));
+    }
+
+    std::filesystem::path dir_;
+    std::wstring path_;
+};
+
+TEST_F(ConfigRecoveryTest, FirstSaveHasRecoverableCopy) {
+    SaveVni();
+    ASSERT_TRUE(std::filesystem::exists(path_ + L".lastgood"));
+    EXPECT_EQ(Read(path_), Read(path_ + L".lastgood"));
+    EXPECT_FALSE(std::filesystem::exists(path_ + L".tmp"));
+    EXPECT_FALSE(std::filesystem::exists(path_ + L".lastgood.tmp"));
+}
+
+TEST_F(ConfigRecoveryTest, OverwritePreservesPreviousConfigAndPrefersPrimary) {
+    SaveVni();
+    const auto previous = Read(path_);
+    TypingConfig config;
+    config.inputMethod = InputMethod::Combined;
+    ASSERT_TRUE(ConfigManager::SaveToFile(path_, config));
+    EXPECT_EQ(Read(path_ + L".lastgood"), previous);
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::Combined);
+}
+
+TEST_F(ConfigRecoveryTest, MissingPrimaryLoadsBackupBeforeDefaults) {
+    SaveVni();
+    ASSERT_TRUE(std::filesystem::remove(path_));
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+    EXPECT_FALSE(loaded->spellCheckEnabled);
+}
+
+TEST_F(ConfigRecoveryTest, EmptyPrimaryLoadsBackupEvenWithUnchangedTimestamp) {
+    SaveVni();
+    TypingConfig config;
+    config.inputMethod = InputMethod::Combined;
+    ASSERT_TRUE(ConfigManager::SaveToFile(path_, config));
+    ASSERT_TRUE(ConfigManager::LoadFromFile(path_)); // Prime cache.
+    const auto mtime = std::filesystem::last_write_time(path_);
+    Write(path_, "");
+    std::filesystem::last_write_time(path_, mtime);
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+    EXPECT_FALSE(loaded->spellCheckEnabled);
+}
+
+TEST_F(ConfigRecoveryTest, DamagedPrimaryLoadsBackup) {
+    SaveVni();
+    Write(path_, "[input\nmethod = \"v");
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+}
+
+TEST_F(ConfigRecoveryTest, OversizedPrimaryLoadsBoundedBackup) {
+    SaveVni();
+    Write(path_, std::string(5 * 1024 * 1024 + 1, 'x'));
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+}
+
+TEST_F(ConfigRecoveryTest, RecoveryAndSubsequentSavePreserveOtherSections) {
+    Write(path_, "[input]\nmethod = 'vni'\n[ui]\nbackground_opacity = 51\n"
+                 "[macros]\nbtw = 'by the way'\n[custom]\nvalue = 42\n");
+    ASSERT_TRUE(ConfigManager::SaveWireGeneration(path_, 12));
+    const auto backup = Read(path_ + L".lastgood");
+    Write(path_, std::string(128, '\0'));
+    auto ui = ConfigManager::LoadUIConfig(path_);
+    ASSERT_TRUE(ui);
+    EXPECT_EQ(ui->backgroundOpacity, 51);
+    EXPECT_EQ(ConfigManager::LoadMacros(path_)[L"btw"], L"by the way");
+
+    ui->backgroundOpacity = 63;
+    ASSERT_TRUE(ConfigManager::SaveUIConfig(path_, *ui));
+    auto typing = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(typing);
+    EXPECT_EQ(typing->inputMethod, InputMethod::VNI);
+    EXPECT_EQ(ConfigManager::LoadMacros(path_)[L"btw"], L"by the way");
+    EXPECT_NE(Read(path_).find("value = 42"), std::string::npos);
+    EXPECT_EQ(Read(path_ + L".lastgood"), backup);
+}
+
+TEST_F(ConfigRecoveryTest, MissingPrimaryMacrosRecoverToo) {
+    ASSERT_TRUE(ConfigManager::SaveMacros(path_, {{L"btw", L"by the way"}}));
+    ASSERT_TRUE(std::filesystem::remove(path_));
+    EXPECT_EQ(ConfigManager::LoadMacros(path_)[L"btw"], L"by the way");
+}
+
+TEST_F(ConfigRecoveryTest, BrokenFilesAndUncommittedTempAreNotUsed) {
+    Write(path_, "invalid {{{");
+    Write(path_ + L".lastgood", "invalid {{{");
+    Write(path_ + L".tmp", "[input]\nmethod = 'vni'\n");
+    EXPECT_FALSE(ConfigManager::LoadFromFile(path_));
+    EXPECT_FALSE(ConfigManager::SaveUIConfig(path_, UIConfig{}));
+    EXPECT_EQ(Read(path_), "invalid {{{");
+    EXPECT_EQ(Read(path_ + L".lastgood"), "invalid {{{");
+}
+
+TEST_F(ConfigRecoveryTest, BackupWriteFailureLeavesPrimaryIntact) {
+    Write(path_, "[input]\nmethod = 'vni'\n");
+    const auto previous = Read(path_);
+    ASSERT_TRUE(std::filesystem::create_directory(path_ + L".lastgood.tmp"));
+    EXPECT_FALSE(ConfigManager::SaveToFile(path_, TypingConfig{}));
+    EXPECT_EQ(Read(path_), previous);
+}
+
+TEST_F(ConfigRecoveryTest, PrimaryTempWriteFailureLeavesCommittedFilesIntact) {
+    SaveVni();
+    const auto previous = Read(path_);
+    const auto backup = Read(path_ + L".lastgood");
+    ASSERT_TRUE(std::filesystem::create_directory(path_ + L".tmp"));
+    EXPECT_FALSE(ConfigManager::SaveToFile(path_, TypingConfig{}));
+    EXPECT_EQ(Read(path_), previous);
+    EXPECT_EQ(Read(path_ + L".lastgood"), backup);
+}
+
+TEST_F(ConfigRecoveryTest, TransactionBackupIsNotOverwritten) {
+    Write(path_ + L".bak", "transaction-owned backup");
+    SaveVni();
+    EXPECT_EQ(Read(path_ + L".bak"), "transaction-owned backup");
+}
+
+TEST_F(ConfigRecoveryTest, CorruptPrimaryWithoutBackupIsNotOverwritten) {
+    Write(path_, "invalid {{{");
+    EXPECT_FALSE(ConfigManager::SaveToFile(path_, TypingConfig{}));
+    EXPECT_EQ(Read(path_), "invalid {{{");
+    EXPECT_FALSE(std::filesystem::exists(path_ + L".lastgood"));
+}
+
+TEST_F(ConfigRecoveryTest, EmptyAndOversizedBackupsAreRejected) {
+    Write(path_ + L".lastgood", "");
+    EXPECT_FALSE(ConfigManager::LoadFromFile(path_));
+    Write(path_ + L".lastgood", std::string(5 * 1024 * 1024 + 1, ' '));
+    EXPECT_FALSE(ConfigManager::LoadFromFile(path_));
+}
+
+TEST_F(ConfigRecoveryTest, WhitespaceOnlyPrimaryUsesBackup) {
+    SaveVni();
+    Write(path_, "  \n# empty after an interrupted write\n");
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+}
+
+#ifdef _WIN32
+TEST_F(ConfigRecoveryTest, BackupStaysHiddenAcrossSavesWhilePrimaryStaysVisible) {
+    for (const auto method : {InputMethod::VNI, InputMethod::Combined, InputMethod::Telex}) {
+        TypingConfig config;
+        config.inputMethod = method;
+        ASSERT_TRUE(ConfigManager::SaveToFile(path_, config));
+
+        const auto backupAttributes = GetFileAttributesW((path_ + L".lastgood").c_str());
+        ASSERT_NE(backupAttributes, INVALID_FILE_ATTRIBUTES);
+        EXPECT_NE(backupAttributes & FILE_ATTRIBUTE_HIDDEN, 0u);
+        const auto primaryAttributes = GetFileAttributesW(path_.c_str());
+        ASSERT_NE(primaryAttributes, INVALID_FILE_ATTRIBUTES);
+        EXPECT_EQ(primaryAttributes & FILE_ATTRIBUTE_HIDDEN, 0u);
+    }
+}
+
+TEST_F(ConfigRecoveryTest, ReusedRecoveryCopyBecomesHiddenWithoutRewritingIt) {
+    const auto backupPath = path_ + L".lastgood";
+    const std::string previous = "[input]\nmethod = 'vni'\n";
+    Write(backupPath, previous);
+    // Recover an existing, visible copy without rotating over its contents.
+    ASSERT_TRUE(ConfigManager::SaveUIConfig(path_, UIConfig{}));
+    EXPECT_EQ(Read(backupPath), previous);
+    const auto attributes = GetFileAttributesW(backupPath.c_str());
+    ASSERT_NE(attributes, INVALID_FILE_ATTRIBUTES);
+    EXPECT_NE(attributes & FILE_ATTRIBUTE_HIDDEN, 0u);
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+}
+
+TEST_F(ConfigRecoveryTest, UnicodePathCanSaveAndRecover) {
+    path_ = (dir_ / L"c\u1ea5u-h\u00ecnh.toml").wstring();
+    SaveVni();
+    ASSERT_TRUE(std::filesystem::remove(path_));
+    auto loaded = ConfigManager::LoadFromFile(path_);
+    ASSERT_TRUE(loaded);
+    EXPECT_EQ(loaded->inputMethod, InputMethod::VNI);
+}
+
+TEST_F(ConfigRecoveryTest, FailedReplacementPreservesPrimaryAndBackup) {
+    SaveVni();
+    const auto previous = Read(path_);
+    // Allow reads/writes but deny deletion/replacement, like a file scanner.
+    HANDLE handle = CreateFileW(path_.c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    ASSERT_NE(handle, INVALID_HANDLE_VALUE);
+    std::unique_ptr<void, decltype(&CloseHandle)> heldFile(handle, &CloseHandle);
+    EXPECT_FALSE(ConfigManager::SaveToFile(path_, TypingConfig{}));
+    EXPECT_EQ(Read(path_), previous);
+    EXPECT_EQ(Read(path_ + L".lastgood"), previous);
+    EXPECT_FALSE(std::filesystem::exists(path_ + L".tmp"));
+}
+#endif
 
 // ============================================================================
 // Loading Tests
@@ -665,6 +908,7 @@ list = ["cs2.exe"]
 
 TEST_F(ConfigManagerTest, SaveAndLoad_UnicodePath) {
     std::wstring unicodePath = L"cấu_hình_tiếng_việt.toml";
+    testConfigPath_ = unicodePath; // Fixture also cleans the recovery copy.
     std::filesystem::remove(std::filesystem::path(unicodePath));
 
     TypingConfig config;

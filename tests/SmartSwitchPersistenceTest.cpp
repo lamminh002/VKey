@@ -25,6 +25,7 @@ protected:
     }
     void TearDown() override {
         std::filesystem::remove(std::filesystem::path(path_));
+        std::filesystem::remove(std::filesystem::path(path_ + L".lastgood"));
     }
     void Write(const std::string& content) {
         std::ofstream file(utf8_);

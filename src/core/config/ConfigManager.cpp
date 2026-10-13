@@ -9,17 +9,20 @@
 #include "toml.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <fstream>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_map>
 #include <filesystem>
 
 #ifdef _WIN32
 #include "core/WinStrings.h"
 #include <ShlObj.h>
+#include <io.h>
 #else
 #include <fcntl.h>
 #include <sys/file.h>
@@ -30,14 +33,39 @@ namespace NextKey {
 
 namespace {
 
+constexpr uintmax_t kMaxConfigFileSizeBytes = 5 * 1024 * 1024;
+
+std::filesystem::path ConfigFilePath(const std::string& utf8Path) {
+#ifdef _WIN32
+    return std::filesystem::path(Utf8ToWide(utf8Path));
+#else
+    return std::filesystem::path(utf8Path);
+#endif
+}
+
+toml::table ParseConfigFile(const std::string& utf8Path) {
+    const auto size = std::filesystem::file_size(ConfigFilePath(utf8Path));
+    if (size == 0 || size > kMaxConfigFileSizeBytes) {
+        throw std::runtime_error("Config file is empty or too large");
+    }
+    auto table = toml::parse_file(utf8Path);
+    // Empty/whitespace-only TOML parses successfully, but must not mask a
+    // recoverable backup with compiled defaults after an interrupted write.
+    if (table.empty()) throw std::runtime_error("Config has no settings");
+    return table;
+}
+
+std::optional<toml::table> TryReadConfigFile(const std::string& utf8Path) {
+    try { return ParseConfigFile(utf8Path); } catch (...) { return std::nullopt; }
+}
+
 // ─── Wave 2 (2026-05-23) — TomlFileCache ───────────────────────────────
 //
 // Lazy parse for the 7 TOML files re-read on every config bump (TODO
-// #1074). Cache keys on the UTF-8 path string; entries hold the mtime
-// at parse time + a shared_ptr<const toml::table>. If a Load() call
-// observes the same mtime as the cached entry, returns the cached
-// table — no file I/O, no parse work (~5ms saved per skipped file on
-// cold cache).
+// #1074). Cache keys on the UTF-8 path string; entries hold the mtime,
+// size and a shared_ptr<const toml::table>. Unchanged metadata avoids
+// rereading/parsing contents; checking size also detects truncation
+// even on filesystems with coarse timestamps.
 //
 // Failure caching: a parse error caches a null table for that mtime;
 // repeated callers don't hammer the broken file until it changes.
@@ -59,16 +87,9 @@ public:
     /// missing or parse error.
     [[nodiscard]] std::shared_ptr<const toml::table> Load(const std::string& utf8Path) {
         std::error_code ec;
-        // C++20 deprecated std::filesystem::u8path. Construct from wstring on
-        // Windows (native encoding) so non-ASCII paths work; on Linux the
-        // native encoding IS UTF-8 so direct construction from std::string
-        // is correct.
-#ifdef _WIN32
-        const std::filesystem::path fsPath(Utf8ToWide(utf8Path));
-#else
-        const std::filesystem::path fsPath(utf8Path);
-#endif
+        const auto fsPath = ConfigFilePath(utf8Path);
         const auto mtime = std::filesystem::last_write_time(fsPath, ec);
+        const auto size = ec ? 0 : std::filesystem::file_size(fsPath, ec);
         if (ec) {
             // File missing — drop any stale cache entry so a future
             // re-create picks up clean.
@@ -79,7 +100,8 @@ public:
         {
             std::lock_guard lk(mu_);
             auto it = entries_.find(utf8Path);
-            if (it != entries_.end() && it->second.mtime == mtime) {
+            if (it != entries_.end() && it->second.mtime == mtime &&
+                it->second.size == size) {
                 return it->second.table;  // shared_ptr copy (may be null)
             }
         }
@@ -87,12 +109,12 @@ public:
         // concurrent Load() on a different file doesn't serialise.
         std::shared_ptr<const toml::table> parsed;
         try {
-            parsed = std::make_shared<const toml::table>(toml::parse_file(utf8Path));
+            parsed = std::make_shared<const toml::table>(ParseConfigFile(utf8Path));
         } catch (...) {
             parsed = nullptr;
         }
         std::lock_guard lk(mu_);
-        entries_[utf8Path] = Entry{mtime, parsed};
+        entries_[utf8Path] = Entry{mtime, size, parsed};
         return parsed;
     }
 
@@ -115,6 +137,7 @@ public:
 private:
     struct Entry {
         std::filesystem::file_time_type mtime;
+        uintmax_t size;
         std::shared_ptr<const toml::table> table;  // null = parse failed at this mtime
     };
     mutable std::mutex mu_;
@@ -144,18 +167,18 @@ TomlFileCache& TomlCache() {
     return *instance;
 }
 
-/// Cached replacement for `toml::parse_file`. Returns a copy of the
-/// cached table on hit, fresh parse on miss. Throws to mirror the
-/// original `toml::parse_file` semantics — callers' try/catch blocks
-/// continue to handle errors uniformly without source changes.
+/// All config readers recover from the same validated backup before using
+/// defaults. Read-only fallback also works when the directory is not writable;
+/// the next successful save recreates the primary with recovered sections.
 toml::table ParseTomlCached(const std::string& utf8Path) {
     auto cached = TomlCache().Load(utf8Path);
     if (cached) return *cached;
-    // Cache miss (file missing or parse error) — re-attempt parse so
-    // the caller sees a real toml::parse_error exception rather than
-    // swallowed details. Cheap because the cache lookup already
-    // confirmed parse failure; the second attempt fails the same way.
-    return toml::parse_file(utf8Path);
+    auto backup = TomlCache().Load(utf8Path + ".lastgood");
+    if (backup) {
+        NEXTKEY_LOG(L"[ConfigManager] Primary config unavailable; loading .lastgood recovery copy");
+        return *backup;
+    }
+    throw std::runtime_error("Config and recovery copy are unavailable");
 }
 
 #ifdef _WIN32
@@ -204,43 +227,105 @@ private:
 };
 #endif
 
-/// Load existing TOML file or return empty table (for merge-and-save pattern)
+/// Merge with the recovered config as well. Only a new installation may start
+/// empty; overwriting an unreadable existing file would destroy recovery data.
 toml::table LoadExistingToml(const std::string& utf8Path) {
-    try { return toml::parse_file(utf8Path); } catch (...) { return {}; }
+    if (auto current = TryReadConfigFile(utf8Path)) return std::move(*current);
+    if (auto backup = TryReadConfigFile(utf8Path + ".lastgood")) return std::move(*backup);
+    if (std::filesystem::exists(ConfigFilePath(utf8Path)) ||
+        std::filesystem::exists(ConfigFilePath(utf8Path + ".lastgood"))) {
+        throw std::runtime_error("Refusing to overwrite unreadable config");
+    }
+    return {};
 }
 
-/// Write TOML table to file atomically
-bool WriteToml(const std::string& utf8Path, const toml::table& tbl) {
-    std::string tempPath = utf8Path + ".tmp";
-#ifdef _WIN32
-    std::ofstream file(Utf8ToWide(tempPath));
-#else
-    std::ofstream file(tempPath);
-#endif
-    if (!file.is_open()) return false;
-    file << tbl;
-    file.close();
-    if (file.fail()) return false;
+/// Flush the temporary file's DATA before renaming it. Closing an ofstream and
+/// requesting MOVEFILE_WRITE_THROUGH on the rename alone does not explicitly
+/// flush the file's buffered contents before replacing the old configuration.
+bool WriteDurableToml(const std::string& utf8Path, const toml::table& tbl) {
+    std::ostringstream stream;
+    stream << tbl;
+    const auto data = stream.str();
+    if (!stream || data.empty() || data.size() > kMaxConfigFileSizeBytes) return false;
 
+    const auto destPath = ConfigFilePath(utf8Path);
+    const auto tempPath = ConfigFilePath(utf8Path + ".tmp");
+#ifndef _WIN32
+    const auto directory = destPath.has_parent_path() ? destPath.parent_path()
+                                                    : std::filesystem::path(".");
+#endif
+    FILE* rawFile = nullptr;
 #ifdef _WIN32
-    std::wstring wDest = Utf8ToWide(utf8Path);
-    std::wstring wTemp = Utf8ToWide(tempPath);
-    if (!MoveFileExW(wTemp.c_str(), wDest.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        DeleteFileW(wTemp.c_str());
-        return false;
-    }
+    if (_wfopen_s(&rawFile, tempPath.c_str(), L"wb") != 0) return false;
 #else
-    if (std::rename(tempPath.c_str(), utf8Path.c_str()) != 0) {
-        std::remove(tempPath.c_str());
-        return false;
+    rawFile = std::fopen(tempPath.c_str(), "wb");
+#endif
+    if (!rawFile) return false;
+    std::unique_ptr<FILE, decltype(&std::fclose)> file(rawFile, &std::fclose);
+    bool success = std::fwrite(data.data(), 1, data.size(), file.get()) == data.size() &&
+                   std::fflush(file.get()) == 0;
+#ifdef _WIN32
+    if (success) success = FlushFileBuffers(
+        reinterpret_cast<HANDLE>(_get_osfhandle(_fileno(file.get())))) != 0;
+#else
+    if (success) success = ::fsync(::fileno(file.get())) == 0;
+#endif
+    success = (std::fclose(file.release()) == 0) && success;
+    if (success) {
+#ifdef _WIN32
+        success = MoveFileExW(tempPath.c_str(), destPath.c_str(),
+                             MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
+#else
+        success = std::rename(tempPath.c_str(), destPath.c_str()) == 0;
+#endif
+        if (success) {
+            TomlCache().Invalidate(utf8Path);
+#ifndef _WIN32
+            // Persist the directory entry as well as the file contents.
+            const int directoryFd = ::open(directory.c_str(), O_RDONLY | O_DIRECTORY);
+            if (directoryFd < 0) {
+                success = false;
+            } else {
+                success = ::fsync(directoryFd) == 0;
+                (void)::close(directoryFd);
+            }
+#endif
+        }
+    }
+    std::error_code ec;
+    std::filesystem::remove(tempPath, ec);
+    return success;
+}
+
+/// Writers hold ConfigFileLock across the read/merge/backup/replace sequence.
+/// Keep the previous valid snapshot independent of .bak, which the updater and
+/// paired lexicon transactions own (and may delete during cleanup).
+bool WriteToml(const std::string& utf8Path, const toml::table& tbl) {
+    const auto backupPath = utf8Path + ".lastgood";
+    if (auto previous = TryReadConfigFile(utf8Path)) {
+        if (!WriteDurableToml(backupPath, *previous)) return false;
+    } else if (!TryReadConfigFile(backupPath)) {
+        // First save also needs a recovery copy. LoadExistingToml has already
+        // rejected an unreadable existing config with no valid backup.
+        if (!WriteDurableToml(backupPath, tbl)) return false;
+    }
+#ifdef _WIN32
+    // Atomic replacement brings the new file's attributes, so reapply Hidden
+    // after every save (and when reusing an older visible recovery copy).
+    // Keep this cosmetic step best-effort: it must not prevent saving settings.
+    const auto nativeBackupPath = ConfigFilePath(backupPath);
+    const DWORD attributes = GetFileAttributesW(nativeBackupPath.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES ||
+        ((attributes & FILE_ATTRIBUTE_HIDDEN) == 0 &&
+         !SetFileAttributesW(nativeBackupPath.c_str(),
+                             (attributes & ~FILE_ATTRIBUTE_NORMAL) | FILE_ATTRIBUTE_HIDDEN))) {
+        NEXTKEY_LOG(L"[ConfigManager] Could not hide recovery copy (error %lu)", GetLastError());
     }
 #endif
-    TomlCache().Invalidate(utf8Path);
-    return true;
+    return WriteDurableToml(utf8Path, tbl);
 }
 
 // Security limits — shared across all Load* functions
-constexpr uintmax_t kMaxConfigFileSizeBytes = 5 * 1024 * 1024;  // 5 MB
 constexpr size_t    kMaxMacroKeyLen         = 32;
 constexpr size_t    kMaxMacroValueLen       = 20480;
 constexpr size_t    kMaxPerAppEntries       = 256;
@@ -249,15 +334,7 @@ constexpr size_t    kMaxAppListEntries      = 1000;
 }  // namespace
 
 std::optional<TypingConfig> ConfigManager::LoadFromFile(const std::wstring& path) {
-    // Guard: reject config files larger than 5 MB to prevent OOM via crafted macros
-    std::error_code sizeEc;
-    auto fileSize = std::filesystem::file_size(path, sizeEc);
-    if (sizeEc || fileSize > kMaxConfigFileSizeBytes) {
-        NEXTKEY_LOG(L"[ConfigManager] Config file too large or unreadable (%llu bytes), using defaults",
-                    sizeEc ? 0ULL : static_cast<unsigned long long>(fileSize));
-        return std::nullopt;
-    }
-
+    // ParseTomlCached bounds both the primary and recovery file to 5 MiB.
     try {
         std::string utf8Path = WideToUtf8(path);
         auto table = ParseTomlCached(utf8Path);
@@ -1347,15 +1424,7 @@ ConvertConfig ConfigManager::LoadConvertConfigOrDefault() {
 
 std::unordered_map<std::wstring, std::wstring> ConfigManager::LoadMacros(const std::wstring& path) {
     std::unordered_map<std::wstring, std::wstring> data;
-    // Guard: reject files larger than 1 MB — a large macro section triggers OOM when
-    // HookEngine allocates SendInput arrays proportional to the expansion length.
-    std::error_code sizeEc;
-    auto fileSize = std::filesystem::file_size(path, sizeEc);
-    if (sizeEc || fileSize > kMaxConfigFileSizeBytes) {
-        NEXTKEY_LOG(L"[ConfigManager] Macro file too large or unreadable (%llu bytes), skipping macros",
-                    sizeEc ? 0ULL : static_cast<unsigned long long>(fileSize));
-        return data;
-    }
+    // The common parser checks size limits before trying either file.
     try {
         std::string utf8Path = WideToUtf8(path);
         auto table = ParseTomlCached(utf8Path);

@@ -198,6 +198,7 @@ protected:
     }
     void TearDown() override {
         std::filesystem::remove(std::filesystem::path(testConfigPath_));
+        std::filesystem::remove(std::filesystem::path(testConfigPath_ + L".lastgood"));
     }
     void WriteTestConfig(const std::string& content) {
         std::ofstream file("test_feature_config.toml");
