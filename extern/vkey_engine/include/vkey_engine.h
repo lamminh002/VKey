@@ -117,11 +117,13 @@ bool vkey_engine_has_active_quick_consonant(const VKeyEngine *engine);
  * Pass buf=NULL, cap=0 to query the length. */
 size_t vkey_engine_peek_raw_utf16(const VKeyEngine *engine, uint16_t *buf, size_t cap);
 
-/* Seed the active composition from already-rendered UTF-16 text, treating every
- * scalar as literal input (for backspace-revive into a committed word). Returns
+/* Seed the active composition from already-rendered UTF-16 text (for
+ * backspace-revive into a committed word). The text is replayed as canonical
+ * telex keys when they render back to it exactly, so a later tone/modifier key
+ * edits it; otherwise every scalar is seeded literally (ADR-0013). Either way
+ * peek_raw returns the seeded keys, not keys the user physically typed. Returns
  * true on success, false (leaving the engine reset) on invalid UTF-16 or
- * capacity overflow. Re-applying a tone/modifier to seeded glyphs is NOT
- * faithfully supported — that needs a raw snapshot captured at commit time. */
+ * capacity overflow. */
 bool vkey_engine_seed_text_utf16(VKeyEngine *engine, const uint16_t *buf, size_t len);
 
 /* --- ABI v3: lexicon smart-restore -----------------------------------------
