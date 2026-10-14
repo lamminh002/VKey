@@ -26,14 +26,11 @@ struct AppOverrideEntry {
 /// FR8: Engine works with compiled defaults when config missing
 class ConfigManager {
 public:
-    /// Load config from file, falling back to a validated .lastgood copy.
-    /// Returns nullopt if neither file is usable. All config readers use this
-    /// fallback; the next successful save recreates a missing/broken primary.
+    /// Load config from file, returns nullopt if file doesn't exist or is invalid
     [[nodiscard]] static std::optional<TypingConfig> LoadFromFile(const std::wstring& path);
 
-    /// Durably replace config while preserving the previous valid .lastgood
-    /// copy (seeded on first save, hidden on Windows).
-    /// Returns false on I/O/recovery failure.
+    /// Durably replace config (flush + atomic rename). An existing file that is
+    /// not valid TOML is moved to `<path>.corrupt` first. Returns false on I/O failure.
     [[nodiscard]] static bool SaveToFile(const std::wstring& path, const TypingConfig& config);
 
     /// Get the config file path (exe dir or %APPDATA% fallback).

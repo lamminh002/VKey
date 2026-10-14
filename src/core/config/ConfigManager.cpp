@@ -43,20 +43,19 @@ std::filesystem::path ConfigFilePath(const std::string& utf8Path) {
 #endif
 }
 
+/// Reads the bytes ourselves instead of toml::parse_file, which reports an
+/// unopenable file as parse_error too. Here parse_error means "read fine, not
+/// valid TOML"; I/O failures throw other exceptions.
 toml::table ParseConfigFile(const std::string& utf8Path) {
-    const auto size = std::filesystem::file_size(ConfigFilePath(utf8Path));
-    if (size == 0 || size > kMaxConfigFileSizeBytes) {
-        throw std::runtime_error("Config file is empty or too large");
+    const auto path = ConfigFilePath(utf8Path);
+    const auto size = std::filesystem::file_size(path);
+    if (size > kMaxConfigFileSizeBytes) throw std::runtime_error("Config file too large");
+    std::ifstream in(path, std::ios::binary);
+    std::string data(static_cast<size_t>(size), '\0');
+    if (!in.read(data.data(), static_cast<std::streamsize>(data.size()))) {
+        throw std::runtime_error("Config file unreadable");
     }
-    auto table = toml::parse_file(utf8Path);
-    // Empty/whitespace-only TOML parses successfully, but must not mask a
-    // recoverable backup with compiled defaults after an interrupted write.
-    if (table.empty()) throw std::runtime_error("Config has no settings");
-    return table;
-}
-
-std::optional<toml::table> TryReadConfigFile(const std::string& utf8Path) {
-    try { return ParseConfigFile(utf8Path); } catch (...) { return std::nullopt; }
+    return toml::parse(data, utf8Path);
 }
 
 // ─── Wave 2 (2026-05-23) — TomlFileCache ───────────────────────────────
@@ -167,18 +166,13 @@ TomlFileCache& TomlCache() {
     return *instance;
 }
 
-/// All config readers recover from the same validated backup before using
-/// defaults. Read-only fallback also works when the directory is not writable;
-/// the next successful save recreates the primary with recovered sections.
+/// Cached replacement for `toml::parse_file`. Returns a copy of the
+/// cached table on hit, fresh parse on miss. Throws on missing/invalid
+/// files so callers' try/catch blocks fall back to defaults uniformly.
 toml::table ParseTomlCached(const std::string& utf8Path) {
     auto cached = TomlCache().Load(utf8Path);
     if (cached) return *cached;
-    auto backup = TomlCache().Load(utf8Path + ".lastgood");
-    if (backup) {
-        NEXTKEY_LOG(L"[ConfigManager] Primary config unavailable; loading .lastgood recovery copy");
-        return *backup;
-    }
-    throw std::runtime_error("Config and recovery copy are unavailable");
+    return ParseConfigFile(utf8Path);
 }
 
 #ifdef _WIN32
@@ -227,26 +221,33 @@ private:
 };
 #endif
 
-/// Merge with the recovered config as well. Only a new installation may start
-/// empty; overwriting an unreadable existing file would destroy recovery data.
+/// Invalid TOML (a bad hand edit, or a file damaged before saves were made
+/// durable) is moved to `.corrupt` rather than overwritten, so the user can
+/// still recover it by hand while new settings keep saving. Read failures
+/// (e.g. a scanner holding the file) propagate and fail this save instead:
+/// that file may be perfectly fine.
 toml::table LoadExistingToml(const std::string& utf8Path) {
-    if (auto current = TryReadConfigFile(utf8Path)) return std::move(*current);
-    if (auto backup = TryReadConfigFile(utf8Path + ".lastgood")) return std::move(*backup);
-    if (std::filesystem::exists(ConfigFilePath(utf8Path)) ||
-        std::filesystem::exists(ConfigFilePath(utf8Path + ".lastgood"))) {
-        throw std::runtime_error("Refusing to overwrite unreadable config");
+    const auto path = ConfigFilePath(utf8Path);
+    if (!std::filesystem::exists(path)) return {};
+    try {
+        return ParseConfigFile(utf8Path);
+    } catch (const toml::parse_error&) {
+        std::filesystem::rename(path, ConfigFilePath(utf8Path + ".corrupt"));
+        TomlCache().Invalidate(utf8Path);
+        NEXTKEY_LOG(L"[ConfigManager] Invalid config moved to .corrupt; starting from defaults");
+        return {};
     }
-    return {};
 }
 
-/// Flush the temporary file's DATA before renaming it. Closing an ofstream and
-/// requesting MOVEFILE_WRITE_THROUGH on the rename alone does not explicitly
-/// flush the file's buffered contents before replacing the old configuration.
-bool WriteDurableToml(const std::string& utf8Path, const toml::table& tbl) {
+/// Flush the temporary file's DATA before renaming it. NTFS journals the rename
+/// but not file contents, so without the flush a power loss can commit the
+/// rename first and leave config.toml empty or NUL-filled. Flush + rename gives
+/// old-or-new after a crash; callers hold ConfigFileLock across read/merge/write.
+bool WriteToml(const std::string& utf8Path, const toml::table& tbl) {
     std::ostringstream stream;
     stream << tbl;
     const auto data = stream.str();
-    if (!stream || data.empty() || data.size() > kMaxConfigFileSizeBytes) return false;
+    if (!stream || data.size() > kMaxConfigFileSizeBytes) return false;
 
     const auto destPath = ConfigFilePath(utf8Path);
     const auto tempPath = ConfigFilePath(utf8Path + ".tmp");
@@ -295,34 +296,6 @@ bool WriteDurableToml(const std::string& utf8Path, const toml::table& tbl) {
     std::error_code ec;
     std::filesystem::remove(tempPath, ec);
     return success;
-}
-
-/// Writers hold ConfigFileLock across the read/merge/backup/replace sequence.
-/// Keep the previous valid snapshot independent of .bak, which the updater and
-/// paired lexicon transactions own (and may delete during cleanup).
-bool WriteToml(const std::string& utf8Path, const toml::table& tbl) {
-    const auto backupPath = utf8Path + ".lastgood";
-    if (auto previous = TryReadConfigFile(utf8Path)) {
-        if (!WriteDurableToml(backupPath, *previous)) return false;
-    } else if (!TryReadConfigFile(backupPath)) {
-        // First save also needs a recovery copy. LoadExistingToml has already
-        // rejected an unreadable existing config with no valid backup.
-        if (!WriteDurableToml(backupPath, tbl)) return false;
-    }
-#ifdef _WIN32
-    // Atomic replacement brings the new file's attributes, so reapply Hidden
-    // after every save (and when reusing an older visible recovery copy).
-    // Keep this cosmetic step best-effort: it must not prevent saving settings.
-    const auto nativeBackupPath = ConfigFilePath(backupPath);
-    const DWORD attributes = GetFileAttributesW(nativeBackupPath.c_str());
-    if (attributes == INVALID_FILE_ATTRIBUTES ||
-        ((attributes & FILE_ATTRIBUTE_HIDDEN) == 0 &&
-         !SetFileAttributesW(nativeBackupPath.c_str(),
-                             (attributes & ~FILE_ATTRIBUTE_NORMAL) | FILE_ATTRIBUTE_HIDDEN))) {
-        NEXTKEY_LOG(L"[ConfigManager] Could not hide recovery copy (error %lu)", GetLastError());
-    }
-#endif
-    return WriteDurableToml(utf8Path, tbl);
 }
 
 // Security limits — shared across all Load* functions
