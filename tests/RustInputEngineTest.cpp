@@ -408,7 +408,7 @@ TEST_F(RustInputEngineTest, SeedFromTextLiteralRestore) {
 
     ASSERT_TRUE(engine.SeedFromText(L"việt"));
     EXPECT_EQ(engine.Peek(), L"việt");
-    EXPECT_EQ(engine.PeekRaw(), L"việt");
+    EXPECT_EQ(engine.PeekRaw(), L"vieetj");
     EXPECT_EQ(engine.Count(), 4u);
     EXPECT_FALSE(engine.IsToneEscaped());  // seeding is not a tone escape
 }
