@@ -1483,6 +1483,16 @@ HookEngine::KeyOutcome HookEngine::HandleCommitUndoFsm(DWORD vkCode, bool vnMode
                                                        bool cachedShift, bool cachedCapsLock,
                                                        bool cachedCtrl, bool cachedAlt,
                                                        bool cachedWin) {
+    // Remember which punctuation opened the current word (":" in ":smile:")
+    // for IsHostReplacedWord at commit time. Modifier-only keys never reach
+    // here, so Shift+';' still sees ':' as the previous key. Translate only OEM
+    // punctuation keys to keep ToUnicodeEx off the per-letter path.
+    if (vkCode >= 'A' && vkCode <= 'Z' && engine_->Count() == 0) {
+        commitState_.SetWordOpenGlyph(commitState_.PrevKeyGlyph());
+    }
+    commitState_.SetPrevKeyGlyph(
+        vkCode >= VK_OEM_1 && IsCommitTrigger(vkCode) ? VkToMacroChar(vkCode) : L'\0');
+
     // Ctrl/Alt/Win invalidate commit-undo: Ctrl+BS deletes entire word (not just the
     // space), Ctrl+A/C/Z change cursor/selection — all make saved commit state stale.
     // Must check BEFORE the state machine to prevent ghost key replay.
@@ -1730,7 +1740,18 @@ HookEngine::KeyOutcome HookEngine::HandleCommitUndoFsm(DWORD vkCode, bool vnMode
             // Any other key → cancel commit-undo.
             // Exempt keys (tone modifiers, ESC restore-raw) keep state Primed
             // so the downstream replay / restore handlers can read commitStack_.
-            commitState_.SetIdle();
+            // Punctuation glued to the committed word ("ạ:" then "D" → "ạ😀")
+            // can be merged by the host, so drop the stack instead of keeping
+            // it for a later BS-into-empty re-arm.
+            const bool isTrigger = IsCommitTrigger(vkCode);
+            if (ShouldCancelPrimedOnTrigger(isTrigger,
+                                            isTrigger ? VkToMacroChar(vkCode) : L'\0')) {
+                HOOK_LOG(L"  commit-undo: cancel Primed — punctuation glued to committed word (vk=0x%02X)",
+                         vkCode);
+                CancelCommitUndo();
+            } else {
+                commitState_.SetIdle();
+            }
         }
     }
     if (commitState_.IsReady()) {
@@ -1741,27 +1762,35 @@ HookEngine::KeyOutcome HookEngine::HandleCommitUndoFsm(DWORD vkCode, bool vnMode
             vkCode == VK_DELETE) {
             HOOK_LOG(L"  commit-undo: cancel — navigation key vk=0x%02X", vkCode);
             CancelCommitUndo();
-        } else if (IsCommitTrigger(vkCode) && engine_->Count() == 0) {
-            // Printable commit trigger with engine empty (e.g., second '=' in "a==",
-            // second ' ' in "a  "): stay Ready so subsequent BS sequence can reach Primed.
-            // `>=` (not `>`) keeps SPACE in the printable branch — MapVirtualKeyW(VK_SPACE)
-            // returns L' ', which would otherwise fall into the cancel branch.
-            wchar_t ch = VkToMacroChar(vkCode);
-            if (ch >= L' ') {
-                commitState_.IncrementPendingTriggers();
-                HOOK_LOG(L"  commit-undo: extra trigger '%c' in Ready, pendingTriggers=%u", ch, commitState_.PendingTriggerCount());
-            } else {
-                // Non-printable trigger (Esc, Tab, Enter) → cancel undo
-                CancelCommitUndo();
-            }
         } else {
-            // Alpha, digit, or other key → start new word, preserve stack for multi-word backward.
-            // Carry the pending trigger count onto the in-progress word so it travels with the
-            // CommitEntry when the word commits — without this, "chịu :D " then BS×3 + 'a' would
-            // forget the ':' and cause engine/screen desync (replay fires before ':' is deleted).
-            commitState_.SetLeadingTriggersForCurrentWord(commitState_.PendingTriggerCount());
-            commitState_.ResetPendingTriggers();
-            commitState_.SetIdle();
+            // Only spaces are counted into the gap: punctuation can be merged by
+            // the host (Teams ":D" → one emoji glyph), after which counted BSes
+            // drift onto the committed word. See DecideReadyGapKey.
+            const bool isTrigger = IsCommitTrigger(vkCode) && engine_->Count() == 0;
+            const wchar_t ch = isTrigger ? VkToMacroChar(vkCode) : L'\0';
+            switch (DecideReadyGapKey(isTrigger, ch, commitState_.PendingTriggerCount(),
+                                      commitState_.GapEndsInGlyph())) {
+                case ReadyGapAction::TrackSpace:
+                    commitState_.IncrementPendingTriggers();
+                    HOOK_LOG(L"  commit-undo: extra space in Ready, pendingTriggers=%u",
+                             commitState_.PendingTriggerCount());
+                    break;
+                case ReadyGapAction::Cancel:
+                    HOOK_LOG(L"  commit-undo: cancel — gap no longer countable (vk=0x%02X ch=0x%04X)",
+                             vkCode, static_cast<unsigned>(ch));
+                    CancelCommitUndo();
+                    break;
+                case ReadyGapAction::StartWord:
+                    // New word after a space gap → preserve stack for multi-word backward.
+                    // Carry the pending space count onto the in-progress word so it travels
+                    // with the CommitEntry — without this, "chịu  a " then BS×4 + 's' would
+                    // forget the second space and replay before it is deleted.
+                    commitState_.SetLeadingTriggersForCurrentWord(commitState_.PendingTriggerCount());
+                    commitState_.ResetPendingTriggers();
+                    commitState_.SetGapEndsInGlyph(false);
+                    commitState_.SetIdle();
+                    break;
+            }
         }
     }
     return KeyOutcome::Fallthrough;
@@ -2124,7 +2153,20 @@ HookEngine::KeyOutcome HookEngine::DispatchKeyAction(DWORD vkCode, bool cachedSh
         //           desync: "2 words stuck" → tones blocked until full delete).
         if (commitState_.PushedToStack()) {
             switch (DecideCommitUndoArm(static_cast<uint32_t>(vkCode))) {
-                case CommitUndoArm::Arm:   SetCommitUndoReady(); break;
+                case CommitUndoArm::Arm: {
+                    // ":smile:" — the host swaps the whole run, word included,
+                    // for one emoji, so there is nothing left to replay.
+                    const wchar_t open = commitState_.WordOpenGlyph();
+                    if (open != L'\0' && IsHostReplacedWord(open, VkToMacroChar(vkCode))) {
+                        HOOK_LOG(L"  commit-undo: not armed — host-replaced word opened by '%c'",
+                                 open);
+                        CancelCommitUndo();
+                        break;
+                    }
+                    SetCommitUndoReady();
+                    commitState_.SetGapEndsInGlyph(vkCode != VK_SPACE);
+                    break;
+                }
                 case CommitUndoArm::Clear: CancelCommitUndo();   break;
                 case CommitUndoArm::Skip:                        break;
             }
@@ -2697,6 +2739,11 @@ void HookEngine::SetCommitUndoReady() {
     // or restored from a popped CommitEntry during multi-word replay).
     commitState_.SetPendingTriggers(commitState_.LeadingTriggersForCurrentWord());
     commitState_.SetLeadingTriggersForCurrentWord(0);
+    // Re-arm after BS-ing a word to empty: its leading gap is spaces only (a
+    // word glued to punctuation cancelled the stack when it started), so the
+    // caret never sits right after a glyph here. The post-commit Arm path
+    // overrides this with the actual trigger.
+    commitState_.SetGapEndsInGlyph(false);
     commitState_.SetReady();  // sets state + bumps readyTime to GetTickCount()
 }
 

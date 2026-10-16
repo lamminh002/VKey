@@ -112,4 +112,74 @@ TEST(CommitUndoArmDecisionTest, Enter_IsNot_Skip) {
     EXPECT_NE(DecideCommitUndoArm(VK_RETURN_), CommitUndoArm::Arm);
 }
 
+// --- Ready gap: only spaces are countable ----------------------------------
+// Host apps merge punctuation runs (Teams ":D" → one emoji, Word "..." → "…");
+// one BS then erases several counted chars and the replay lands on a word that
+// is already gone ("k s ạ :D" → emoji → BS×3 → "d" rendered "k sajd").
+
+using NextKey::DecideReadyGapKey;
+using NextKey::ReadyGapAction;
+using NextKey::ShouldCancelPrimedOnTrigger;
+
+TEST(CommitUndoArmDecisionTest, ReadyGap_ExtraSpace_IsTracked) {
+    EXPECT_EQ(DecideReadyGapKey(true, L' ', 0, false), ReadyGapAction::TrackSpace);
+    // Space after a punctuation trigger ("chịu, ") stays countable.
+    EXPECT_EQ(DecideReadyGapKey(true, L' ', 0, true), ReadyGapAction::TrackSpace);
+}
+
+TEST(CommitUndoArmDecisionTest, ReadyGap_Punctuation_Cancels_TeamsEmoticon) {
+    // "ạ " + ':' — the ':' may fuse with the next char into an emoji.
+    EXPECT_EQ(DecideReadyGapKey(true, L':', 0, false), ReadyGapAction::Cancel);
+    // "ạ:" + ')' / "ạ." + '.' / "ạ " + '8'.
+    EXPECT_EQ(DecideReadyGapKey(true, L')', 0, true), ReadyGapAction::Cancel);
+    EXPECT_EQ(DecideReadyGapKey(true, L'.', 0, true), ReadyGapAction::Cancel);
+    EXPECT_EQ(DecideReadyGapKey(true, L'8', 1, false), ReadyGapAction::Cancel);
+    // Previously counted as a pending trigger ("a==").
+    EXPECT_EQ(DecideReadyGapKey(true, L'=', 0, true), ReadyGapAction::Cancel);
+}
+
+TEST(CommitUndoArmDecisionTest, ReadyGap_NonPrintableTrigger_Cancels) {
+    EXPECT_EQ(DecideReadyGapKey(true, L'\0', 0, false), ReadyGapAction::Cancel);
+    EXPECT_EQ(DecideReadyGapKey(true, L'\t', 2, false), ReadyGapAction::Cancel);
+}
+
+TEST(CommitUndoArmDecisionTest, ReadyGap_WordAfterSpace_StartsWord) {
+    EXPECT_EQ(DecideReadyGapKey(false, L'\0', 0, false), ReadyGapAction::StartWord);
+    // "chịu, " + 'a': the space separates the new word from the comma.
+    EXPECT_EQ(DecideReadyGapKey(false, L'\0', 1, true), ReadyGapAction::StartWord);
+}
+
+TEST(CommitUndoArmDecisionTest, ReadyGap_WordGluedToPunctuation_Cancels) {
+    // "ạ:" + 'D' → host may render "ạ😀".
+    EXPECT_EQ(DecideReadyGapKey(false, L'\0', 0, true), ReadyGapAction::Cancel);
+}
+
+TEST(CommitUndoArmDecisionTest, Primed_GluedPunctuation_Cancels) {
+    // "ạ " BS (space gone) + ':' → ':' now touches "ạ".
+    EXPECT_TRUE(ShouldCancelPrimedOnTrigger(true, L':'));
+    EXPECT_TRUE(ShouldCancelPrimedOnTrigger(true, L'2'));
+    // Retyping the space, or a non-printable key, keeps Idle-with-stack.
+    EXPECT_FALSE(ShouldCancelPrimedOnTrigger(true, L' '));
+    EXPECT_FALSE(ShouldCancelPrimedOnTrigger(true, L'\0'));
+    EXPECT_FALSE(ShouldCancelPrimedOnTrigger(false, L'\0'));
+}
+
+// --- Host-replaced words: narrow, only shapes seen in a real host -----------
+
+using NextKey::IsHostReplacedWord;
+
+TEST(CommitUndoArmDecisionTest, HostReplacedWord_EmojiShortcode) {
+    // ":smile:" in Teams/Slack/Discord → one emoji, word included.
+    EXPECT_TRUE(IsHostReplacedWord(L':', L':'));
+}
+
+TEST(CommitUndoArmDecisionTest, HostReplacedWord_OtherPunctuation_StaysRevivable) {
+    // Not observed as a host transform → keep backspace-revive.
+    EXPECT_FALSE(IsHostReplacedWord(L'(', L')'));   // "(chào)"
+    EXPECT_FALSE(IsHostReplacedWord(L'"', L'"'));   // "\"chào\""
+    EXPECT_FALSE(IsHostReplacedWord(L':', L' '));   // ":chào "
+    EXPECT_FALSE(IsHostReplacedWord(L'\0', L':'));  // "chào:"
+    EXPECT_FALSE(IsHostReplacedWord(L'\0', L'\0'));
+}
+
 }  // namespace

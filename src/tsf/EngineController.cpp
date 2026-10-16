@@ -1697,12 +1697,13 @@ bool EngineController::TryRestoreLastCommitRaw(ITfContext* pContext) {
     }
     auto* pSession = new EscRestoreLastCommitSession(pContext, body, lastCommit_.rawInput);
     RequestEditSession(pContext, pSession);
+    const bool replaced = pSession->Replaced();
     pSession->Release();
 
     // Reset state regardless of edit session outcome — session failure is logged
     // inside DoEditSession; caller falls back to pass-through ESC.
     ResetCommitUndo();
-    return true;
+    return replaced;
 }
 
 }  // namespace TSF

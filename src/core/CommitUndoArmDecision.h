@@ -93,4 +93,80 @@ enum class CommitUndoArm : uint8_t {
     return CommitUndoArm::Arm;
 }
 
+// ── Host text transforms vs. commit-undo ──────────────────────────────────
+//
+// The hook cannot read host text; commit-undo replays a committed word on the
+// assumption that every counted keystroke is still one char on screen. Hosts
+// that rewrite typed text break that assumption, and the replay then BS-diffs
+// against text that is gone. Known transforms and the rule covering each:
+//
+//   Host / feature                         Typed        Becomes   Rule
+//   Teams/Slack/Discord emoticons          ":D" ":)"    😀 🙂     DecideReadyGapKey
+//   Teams "(y)", Word "(c)"                "(y)"        👍 ©      DecideReadyGapKey
+//   Word/Outlook AutoCorrect               "..." "--"   … —       DecideReadyGapKey
+//   Teams/Slack/Discord emoji shortcode    ":smile:"    😄        IsHostReplacedWord
+//
+// DecideReadyGapKey is generic (only spaces are countable in the gap). Word-
+// level rules are deliberately narrow — only shapes observed in a real host —
+// because each one forfeits backspace-revive for that word. When a new host
+// transform is reported: reproduce it, add a row here, extend the narrowest
+// rule that covers it, and add a test to CommitUndoArmDecisionTest.cpp.
+//
+// UniKey has the same blind spot (verified 2026-10-16 in Teams: "k s ạ :D",
+// BS×3, "s" → "k sá"); it only looks fine with "d" because UniKey appends an
+// invalid key without backspacing, whereas VKey restores raw ("k sajd").
+
+/// What a key typed while commit-undo is Ready (engine empty, caret sitting in
+/// the gap after a committed word) does to the replay window.
+enum class ReadyGapAction : uint8_t {
+    TrackSpace,  ///< Count one more gap char; BS must delete it before priming.
+    Cancel,      ///< Gap is no longer countable → drop the window + stack.
+    StartWord,   ///< A new word starts; keep the stack for multi-word backward.
+};
+
+/// The hook cannot read host text: the replay window only works while counted
+/// keystrokes still match the screen one-for-one. Spaces do. Anything else in
+/// the gap can be merged or substituted by the host — Teams/Slack/Discord turn
+/// ":D", ":)", "(y)", "8)" into one emoji glyph, Word AutoCorrect turns "..."
+/// into "…" — and a single Backspace then erases several counted chars. Every
+/// later BS lands one char to the left of where the hook thinks it is, the
+/// replay revives a word that is already gone, and its BS-diff eats the gap
+/// ("k s ạ :D" → emoji → BS×3 → "d" rendered "k sajd").
+///
+/// `triggerChar` is the char the trigger key inserts (0 when not printable).
+/// `gapEndsInGlyph` is true when the char left of the caret is the committed
+/// word's own non-space trigger (e.g. ':' in "ạ:"): a word started right
+/// there fuses with it ("ạ:D") just like an extra trigger would.
+[[nodiscard]] constexpr ReadyGapAction DecideReadyGapKey(
+    bool isCommitTrigger, wchar_t triggerChar, uint8_t pendingTriggers,
+    bool gapEndsInGlyph) noexcept {
+    if (isCommitTrigger) {
+        // Non-printable triggers (Esc/Tab/Enter/arrows) leave the caret
+        // context; printable non-space ones make the gap host-transformable.
+        return triggerChar == L' ' ? ReadyGapAction::TrackSpace
+                                   : ReadyGapAction::Cancel;
+    }
+    if (pendingTriggers == 0 && gapEndsInGlyph) return ReadyGapAction::Cancel;
+    return ReadyGapAction::StartWord;
+}
+
+/// Primed (gap already backspaced, caret right after the committed word): a
+/// printable non-space trigger now sits glued to that word — "ạ" + ":" + "D"
+/// becomes "ạ😀" in Teams — so the stack can no longer be trusted. A space or
+/// a non-printable key keeps the existing Idle-with-stack behaviour.
+[[nodiscard]] constexpr bool ShouldCancelPrimedOnTrigger(
+    bool isCommitTrigger, wchar_t triggerChar) noexcept {
+    return isCommitTrigger && triggerChar > L' ';
+}
+
+/// True when a word the host replaces wholesale was just committed, so it must
+/// not be armed for replay. `openGlyph` is the char typed right before the
+/// word's first letter (0 if none / not punctuation); `closeTrigger` is the
+/// char of the trigger that committed it. Narrow on purpose — see the table
+/// above; currently only the emoji shortcode ":name:".
+[[nodiscard]] constexpr bool IsHostReplacedWord(wchar_t openGlyph,
+                                                wchar_t closeTrigger) noexcept {
+    return openGlyph == L':' && closeTrigger == L':';
+}
+
 }  // namespace NextKey
