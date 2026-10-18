@@ -211,7 +211,6 @@ var STRINGS = {
         "a.title": "About VKey",
         "a.tagline": "Modern Vietnamese Input Method",
         "a.repo_vkey": "VKey Repo",
-        "a.repo_openkey": "Original OpenKey Repo",
 
         // ── App Overrides dialog ──
         "ao.title": "App Override",
