@@ -75,6 +75,44 @@ Nếu lệnh trên báo lỗi → **không** dùng file đó, tải lại từ t
 Vào phần **Quarantine / Cách ly**, khôi phục VKey, rồi thêm **Exclusion / Ngoại lệ**
 cho thư mục cài đặt.
 
+## <span id="eset-browser">ESET: không gõ được tiếng Việt trong trình duyệt</span>
+
+Nếu VKey vẫn gõ được trong Notepad/Word nhưng không đặt dấu trên Edge/Chrome, **Browser protection / Safe Banking & Browsing** của ESET có thể đang chặn bộ gõ. Trong [issue #229](https://github.com/phatMT97/VKey/issues/229), người dùng đã xác nhận thêm VKey vào **Browser protection allowlist** rồi khởi động lại trình duyệt giúp gõ tiếng Việt trở lại.
+
+### 1. Kiểm tra tiện ích ESET và bảo vệ trình duyệt
+
+- **Edge:** mở `edge://extensions`.
+- **Chrome:** mở `chrome://extensions`.
+- **Firefox:** mở `about:addons` → **Extensions** (Tiện ích mở rộng).
+
+Tìm tiện ích có tên **ESET**, chẳng hạn **ESET Browser Privacy & Security** hoặc **ESET Browser Security**. Nếu có, mở ứng dụng ESET trên máy để kiểm tra **Browser protection / Safe Banking & Browsing**, đặc biệt là **Secure all browsers** (Bảo vệ tất cả trình duyệt) và **Keyboard protection** (Bảo vệ bàn phím). Tên và vị trí mục có thể khác tùy phiên bản ESET.
+
+Không thấy tiện ích chưa có nghĩa là ESET không bảo vệ trình duyệt. Cửa sổ ẩn danh và việc chạy VKey bằng quyền Administrator cũng không bảo đảm tránh được lớp bảo vệ này.
+
+### 2. Thêm VKey vào Browser protection allowlist
+
+1. Xác định đúng thư mục VKey đang sử dụng. Có thể mở **Task Manager**, tìm tiến trình `VKey.exe` hoặc `VKeyClassic.exe`, nhấp chuột phải → **Open file location** (Mở vị trí tệp).
+2. Trong ESET, mở **Advanced setup** (`F5`) → **Protections → Browser protection → Browser protection allowlist → Edit**.
+3. Chọn **Add** và thêm từng file theo chế độ đang dùng:
+
+   | Chế độ VKey | File cần thêm bằng đường dẫn đầy đủ |
+   |---|---|
+   | Hook (mặc định) | `VKey.exe`, hoặc `VKeyClassic.exe` nếu dùng Classic |
+   | TSF | File `.exe` tương ứng ở trên và `VKeyTSF.dll` của bản đang dùng |
+
+   Chỉ thêm `VKeyTSF.dll` chưa đủ cho chế độ Hook. Nếu ESET ghi nhận DLL bị chặn ở đường dẫn khác, hãy dùng đúng đường dẫn trong log.
+4. Nhấn **OK / Apply** để lưu tất cả hộp thoại. **Thoát hoàn toàn trình duyệt**, kể cả tiến trình chạy nền, rồi mở lại và thử gõ, ví dụ `tieengs Vieetj` → `tiếng Việt` với Telex.
+
+Đây là ngoại lệ trong **Browser protection allowlist** của ESET; danh sách loại trừ quét virus thông thường hoặc mục **Loại trừ ứng dụng** của VKey không thay thế thiết lập này. Bạn có thể giữ **Secure all browsers** bật sau khi thêm ngoại lệ.
+
+### 3. Nếu vẫn chưa gõ được
+
+- Kiểm tra lại đường dẫn, nhất là khi vừa cập nhật hoặc di chuyển VKey, và chắc chắn đã đóng hết tiến trình trình duyệt trước khi mở lại.
+- Mở **Log files → Browser protection** trong ESET để tìm file VKey bị chặn. Với file VKey đã xác minh, nhấp chuột phải vào bản ghi để thêm vào allowlist nếu phiên bản ESET hỗ trợ.
+- Để kiểm tra nguyên nhân, có thể **tạm tắt Secure all browsers** trong **Safe Banking & Browsing**, khởi động lại trình duyệt rồi thử gõ. Thao tác này giảm bảo vệ trình duyệt; hãy bật lại sau khi kiểm tra và hoàn tất ngoại lệ.
+
+Tham khảo tài liệu ESET: [Browser protection allowlist](https://help.eset.com/essp/18/en-US/idh_config_sb_allowlist.html) và [Safe Banking & Browsing](https://help.eset.com/essp/18/en-US/idh_config_sb.html).
+
 ## Báo cáo cảnh báo nhầm (giúp mọi người dùng)
 
 Gửi mẫu cho hãng AV để họ gỡ cảnh báo — vài ngày là có hiệu lực cho tất cả người dùng:

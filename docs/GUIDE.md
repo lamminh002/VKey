@@ -28,6 +28,15 @@
 
 ## <span id="faq">❓ Câu hỏi thường gặp (FAQ)</span>
 
+### <span id="eset-browser">🛡️ Q. VKey gõ được trong Notepad/Word nhưng không gõ được tiếng Việt trên Edge/Chrome khi có ESET?</span>
+**A.** Hãy kiểm tra tiện ích và tính năng bảo vệ trình duyệt của ESET. Trong [issue #229](https://github.com/phatMT97/VKey/issues/229), người dùng đã khắc phục bằng cách thêm VKey vào **Browser protection allowlist** rồi khởi động lại trình duyệt.
+
+1. Mở `edge://extensions` (Edge), `chrome://extensions` (Chrome) hoặc `about:addons` → **Extensions** (Firefox); tìm tiện ích có tên **ESET**, chẳng hạn **ESET Browser Privacy & Security**. Dù không thấy tiện ích, vẫn kiểm tra **Browser protection / Safe Banking & Browsing** trong ứng dụng ESET trên máy.
+2. Mở ESET → **Advanced setup** (`F5`) → **Protections → Browser protection → Browser protection allowlist → Edit → Add**. Thêm đúng đường dẫn `VKey.exe` đang chạy, hoặc `VKeyClassic.exe` nếu dùng Classic. Nếu dùng [TSF](#tsf-mode), thêm cả `VKeyTSF.dll`; chỉ thêm DLL này chưa đủ cho chế độ Hook mặc định.
+3. Lưu bằng **OK / Apply**, thoát hoàn toàn trình duyệt rồi mở lại và thử gõ tiếng Việt. Cửa sổ ẩn danh hoặc chạy VKey bằng quyền Administrator có thể vẫn bị ESET chặn.
+
+👉 Xem [hướng dẫn ESET chi tiết, cách tìm đường dẫn file và xử lý nếu vẫn lỗi](ANTIVIRUS.md#eset-browser).
+
 ### 🎮 Q. Tôi có thể vừa gõ tiếng Việt vừa chơi game mà không sợ bị dính phím không?
 **A.** Được, nhưng cần bật **Chế độ game** cho game đó trước.
 
