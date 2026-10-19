@@ -943,7 +943,7 @@ EngineController::MacroResult EngineController::HandleMacroTrigger(
                               activeConfig_.macroTriggerTab, activeConfig_.macroTriggerDir)) {
         if (vkCode == VK_SPACE && !rawMacroBuffer_.empty()) {
             rawMacroBuffer_.push_back(L' ');
-            const bool keep = IsSpaceMacroPrefix(rawMacroBuffer_, spaceMacroKeys_);
+            const bool keep = IsSpaceMacroPrefix(rawMacroBuffer_, macroPrefixIndex_);
             rawMacroBuffer_.pop_back();
             if (keep) {
                 rawMacroBuffer_ += L' ';
@@ -987,7 +987,7 @@ EngineController::MacroResult EngineController::HandleMacroTrigger(
     if (!plan.matched) {
         if (vkCode == VK_SPACE && !rawMacroBuffer_.empty()) {
             rawMacroBuffer_.push_back(L' ');
-            const bool keep = IsSpaceMacroPrefix(rawMacroBuffer_, spaceMacroKeys_);
+            const bool keep = IsSpaceMacroPrefix(rawMacroBuffer_, macroPrefixIndex_);
             rawMacroBuffer_.pop_back();
             if (keep) {
                 rawMacroBuffer_ += L' ';
@@ -1329,6 +1329,7 @@ void EngineController::ReloadMacros(uint8_t generation) {
     ClearMacroTracking();
     macroTable_.clear();
     spaceMacroKeys_.clear();
+    macroPrefixIndex_ = MacroPrefixIndex{};
     maxMacroKeyLen_ = 0;
     if (!activeConfig_.macroEnabled && (!pendingConfig_ || !pendingConfig_->macroEnabled)) return;
 
@@ -1349,6 +1350,7 @@ void EngineController::ReloadMacros(uint8_t generation) {
         (void)value;
         if (key.find(L' ') != std::wstring::npos) spaceMacroKeys_.insert(key);
     }
+    macroPrefixIndex_ = MacroPrefixIndex(spaceMacroKeys_);
     maxMacroKeyLen_ = Macro::LongestMacroKeyLength(macroTable_);
     TSF_LOG(L"ReloadMacros: loaded %zu entries (generation=%u)",
             macroTable_.size(), static_cast<unsigned>(generation));

@@ -2129,7 +2129,7 @@ HookEngine::KeyOutcome HookEngine::DispatchKeyAction(DWORD vkCode, bool cachedSh
                 savedMacroBuffer = rawMacroBuffer_;
             } else if (ch == L' '
                        && IsSpaceMacroPrefix(rawMacroBuffer_ + L' ',
-                                             cfgSnap->spaceMacroKeys)) {
+                                             cfgSnap->macroPrefixIndex)) {
                 savedMacroBuffer = rawMacroBuffer_ + L' ';
             }
         }
@@ -3683,7 +3683,7 @@ NextKey::Pipeline::MacroOutcome HookEngine::HandleMacro(
                 // Rule 11.2). IsSpaceMacroPrefix is noexcept and read-only, so the
                 // append/pop pair restores the buffer with no per-keystroke alloc.
                 rawMacroBuffer_.push_back(L' ');
-                preserve = IsSpaceMacroPrefix(rawMacroBuffer_, cfgSnap->spaceMacroKeys);
+                preserve = IsSpaceMacroPrefix(rawMacroBuffer_, cfgSnap->macroPrefixIndex);
                 rawMacroBuffer_.pop_back();
             } else if (IsMacroTrigger(vk)) {
                 preserve = VkToMacroChar(vk) > L' ';

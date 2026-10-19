@@ -16,6 +16,7 @@
 #include "EditSession.h"
 #include "LanguageBarButton.h"
 #include "core/MacroContextMatch.h"
+#include "core/MacroPrefix.h"
 #include "core/TsfPromotionDecision.h"
 #include "core/config/TypingConfig.h"
 #include "core/engine/IInputEngine.h"
@@ -313,6 +314,7 @@ private:
     // sized. TSF reloads this local snapshot whenever configGeneration changes.
     std::unordered_map<std::wstring, std::wstring> macroTable_;
     std::unordered_set<std::wstring> spaceMacroKeys_;
+    MacroPrefixIndex macroPrefixIndex_;
     // Bounds the backward scan of document text in LookupMacroInContext.
     std::size_t maxMacroKeyLen_ = 0;
     std::wstring rawMacroBuffer_;
