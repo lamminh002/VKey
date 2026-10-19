@@ -73,6 +73,14 @@ struct Segment {
 [[nodiscard]] bool IsTextProducingTrigger(uint32_t vkCode,
                                           wchar_t triggerChar) noexcept;
 
+/// True when a printable commit trigger must keep the composition as typed
+/// (no lexicon correction). Only real sentence punctuation `. , ; : ! ? )`
+/// ends a word; anything else glued to it — digits ("egx6" → not "ẽo6"),
+/// '@' (emails), '-' '_' (identifiers), '/' (paths), '#' '$' '%' '&' … — is
+/// part of a token. Non-printable triggers (Space, Enter, Tab, arrows; char
+/// 0) are unaffected. VNI-family mid-word digits never reach a commit.
+[[nodiscard]] bool IsVerbatimCommitTrigger(wchar_t triggerChar) noexcept;
+
 [[nodiscard]] bool ShouldTrigger(uint32_t vkCode,
                                  bool triggerSpace,
                                  bool triggerEnter,

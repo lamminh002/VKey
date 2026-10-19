@@ -580,6 +580,24 @@ TEST(MacroTriggerDecisionTest, TextProducingTriggerSeparatesPrintableFromActionK
     EXPECT_FALSE(IsTextProducingTrigger(0x41, L'a')); // not a commit trigger
 }
 
+TEST(MacroTriggerDecisionTest, OnlySentencePunctuationAllowsCommitCorrection) {
+    // Real punctuation ends a word → lexicon correction may apply.
+    for (wchar_t c : {L'.', L',', L';', L':', L'!', L'?', L')'}) {
+        EXPECT_FALSE(IsVerbatimCommitTrigger(c)) << static_cast<char>(c);
+    }
+    // Non-printable triggers (Space/Enter/Tab/arrows) are not this rule's call.
+    EXPECT_FALSE(IsVerbatimCommitTrigger(L' '));
+    EXPECT_FALSE(IsVerbatimCommitTrigger(L'\t'));
+    EXPECT_FALSE(IsVerbatimCommitTrigger(0));
+    // Token-glued chars keep the word as typed: "egx6" must not become "ẽo6",
+    // emails, identifiers, paths, hashtags, ...
+    for (wchar_t c : {L'0', L'6', L'9', L'@', L'-', L'_', L'/', L'\\', L'#', L'$',
+                      L'%', L'^', L'&', L'*', L'(', L'+', L'=', L'[', L']', L'{',
+                      L'}', L'|', L'<', L'>', L'`', L'~', L'\'', L'"'}) {
+        EXPECT_TRUE(IsVerbatimCommitTrigger(c)) << static_cast<char>(c);
+    }
+}
+
 TEST(MacroTriggerDecisionTest, ShouldTriggerRespectsTabOnly) {
     bool triggerSpace = false;
     bool triggerEnter = false;

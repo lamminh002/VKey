@@ -231,6 +231,17 @@ bool IsTextProducingTrigger(uint32_t vkCode, wchar_t triggerChar) noexcept {
         && (vkCode == 0x20 || triggerChar > L' ');
 }
 
+bool IsVerbatimCommitTrigger(wchar_t triggerChar) noexcept {
+    if (triggerChar <= L' ') return false;
+    switch (triggerChar) {
+        case L'.': case L',': case L';': case L':':
+        case L'!': case L'?': case L')':
+            return false;
+        default:
+            return true;
+    }
+}
+
 bool ShouldTrigger(uint32_t vkCode,
                    bool triggerSpace,
                    bool triggerEnter,

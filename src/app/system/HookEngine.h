@@ -383,7 +383,9 @@ private:
     [[nodiscard]] bool HandleAlphaKey(DWORD vkCode, bool shift, bool capsLock);
     [[nodiscard]] bool HandleVniDigitKey(DWORD vkCode); // VNI/UserDefined digit 0-9: push to engine, replace composition
     void HandleBackspace();
-    bool CommitComposition();  // Returns true if auto-restore changed text
+    // Returns true if auto-restore changed text. `verbatim` drops a lexicon
+    // correction (IsVerbatimCommitTrigger); raw restore still applies.
+    bool CommitComposition(bool verbatim = false);
     void ResetComposition();
     void CancelCommitUndo();   // commitUndoState_ = Idle + commitStack_.clear()
     void SetCommitUndoReady(); // commitUndoState_ = Ready + timestamp

@@ -2134,7 +2134,8 @@ HookEngine::KeyOutcome HookEngine::DispatchKeyAction(DWORD vkCode, bool cachedSh
             }
         }
 
-        bool restored = CommitComposition();
+        bool restored = CommitComposition(
+            Macro::IsVerbatimCommitTrigger(VkToMacroChar(vkCode)));
 
         if (!savedMacroBuffer.empty()) {
             rawMacroBuffer_ = std::move(savedMacroBuffer);
@@ -2634,7 +2635,7 @@ void HookEngine::HandleBackspace() {
     }
 }
 
-bool HookEngine::CommitComposition() {
+bool HookEngine::CommitComposition(bool verbatim) {
     VKEY_ASSERT_HOOK_THREAD();
     HOOK_LOG(L"  CommitComposition (count=%zu, prev='%s')", engine_->Count(), previousComposition_.c_str());
 
@@ -2647,10 +2648,14 @@ bool HookEngine::CommitComposition() {
     // escRawHistory_ (see TelexEngineTest.EscRestoreRaw_PeekRawClearedByCommit).
     // Snapshot lives in CommitEntry.rawInput for post-BS ESC restore.
     std::wstring rawSnapshot = engine_->PeekRaw();
+    // Uncorrected commit == the engine's rendered text; Commit() clears it.
+    std::wstring rendered = verbatim ? engine_->Peek() : std::wstring{};
 
     std::wstring committed = engine_->Commit();
     if (engine_->LastCommitWasCorrected()) {
-        HOOK_LOG(L"  CommitComposition: lexicon-corrected, text='%s'", committed.c_str());
+        HOOK_LOG(L"  CommitComposition: lexicon-corrected, text='%s' verbatim=%d",
+                 committed.c_str(), verbatim ? 1 : 0);
+        if (verbatim) committed = std::move(rendered);
     }
 
     bool restored = false;

@@ -681,9 +681,14 @@ void EngineController::CommitWithChar(ITfContext* pContext, wchar_t appendChar) 
     //
     // PeekRaw BEFORE engine_->Commit() — see Commit() comment above.
     std::wstring rawSnapshot = engine_->PeekRaw();
+    // Uncorrected commit == the engine's rendered text; Commit() clears it.
+    const bool verbatim = Macro::IsVerbatimCommitTrigger(appendChar);
+    std::wstring rendered = verbatim ? engine_->Peek() : std::wstring{};
     std::wstring committed = engine_->Commit();
     if (engine_->LastCommitWasCorrected()) {
-        TSF_LOG(L"CommitWithChar: lexicon-corrected, text='%ls'", committed.c_str());
+        TSF_LOG(L"CommitWithChar: lexicon-corrected, text='%ls' verbatim=%d",
+                committed.c_str(), verbatim ? 1 : 0);
+        if (verbatim) committed = std::move(rendered);
     }
 
     // Append the commit character (e.g., space) if provided
