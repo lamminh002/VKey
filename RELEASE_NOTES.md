@@ -33,6 +33,14 @@ Tên phát hiện được các engine trả về:
 - `VKeyClassic.zip`: Bkav (`W32.Malware.AD871EEE`).
 - `VKeyClassic.exe`: Bkav (`W32.Malware.AD871EEE`), Microsoft (`Trojan:Win32/Wacatac.C!ml`), APEX (`Malicious`).
 
+#### Vì sao có thể bị antivirus nhận nhầm?
+
+- **VKey cần xử lý bàn phím để gõ tiếng Việt:** hook bàn phím, gửi phím tổng hợp (`SendInput`) và tích hợp TSF là các cơ chế của bộ gõ. Tùy chọn khởi động cùng Windows và watchdog cũng có thể làm tăng tín hiệu heuristic. Một số cơ chế tương tự xuất hiện trong phần mềm độc hại, nên bộ quét heuristic/ML có thể phân loại nhầm phần mềm hợp lệ. Đây là một khả năng giải thích cảnh báo, chưa phải nguyên nhân đã được các hãng xác nhận riêng cho những hash trên.
+- **v4.3 chưa có chữ ký Authenticode:** cả Sciter và Classic thiếu thông tin publisher đã được xác thực và reputation từ chứng chỉ ký số. Điều này góp phần làm bản tải mới khó được tin cậy hơn. Cảnh báo SmartScreen về độ phổ biến/publisher và verdict antivirus là hai cơ chế khác nhau; thiếu chữ ký không tự chứng minh file có virus, và có chữ ký cũng không bảo đảm antivirus sẽ không cảnh báo.
+- **Chưa có kết luận gỡ cảnh báo từ hãng antivirus:** các tên `Wacatac.C!ml`, `Malicious` và `W32.Malware.AD871EEE` ở trên là nhãn mà từng engine trả về. Chỉ nhãn đó hoặc việc ít engine cảnh báo chưa đủ để khẳng định chắc chắn đây là false positive. Dự án giữ nguyên kết quả và liên kết theo SHA-256 để đối chiếu minh bạch.
+
+Microsoft giải thích rằng [bộ phân loại ML/heuristic có thể tạo false positive và chữ ký số giúp tăng độ tin cậy](https://www.microsoft.com/en-us/security/blog/2018/08/16/partnering-with-the-industry-to-minimize-false-positives/). Nếu cần yêu cầu Microsoft xem xét lại một file, hãy [gửi mẫu để phân tích](https://www.microsoft.com/wdsi/filesubmission); chưa có kết quả xử lý từ hãng được công bố ở đây. Trước khi xử lý cảnh báo, đối chiếu nguồn tải và build attestation theo README; xem thêm [hướng dẫn antivirus](docs/ANTIVIRUS.md).
+
 `VKey.zip` có 1 engine lỗi; `vkey_engine.dll` có 3 engine timeout. Các báo cáo cũng liệt kê những engine không hỗ trợ định dạng file. Số cảnh báo của ZIP không thay thế kết quả quét EXE bên trong.
 
 **English:** The table links to VirusTotal reports for the exact released file hashes, with UTC scan times and malicious/suspicious engine counts. Some engines flag the executables and Classic ZIP as listed above. Archive and executable results differ; check the individual reports. The Sciter ZIP has one engine error and the engine DLL has three timeouts.
