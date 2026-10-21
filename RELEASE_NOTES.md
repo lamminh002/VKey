@@ -70,9 +70,15 @@ Sau khi cài v4.3.1, các lần cập nhật tiếp theo sẽ được xác minh
 
 Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo hoặc chặn ứng dụng. Chữ ký gói cập nhật không thay thế Authenticode.
 
-### VirusTotal
+### Kết quả VirusTotal (v4.3.1)
 
-Kết quả quét cho Sciter, Classic và DLL engine sẽ được bổ sung trước khi phát hành.
+| Tệp / báo cáo VirusTotal | Engine báo độc hại | Đáng ngờ | Quét lúc (UTC) |
+|---|---|---|---|
+| [VKey.zip](https://www.virustotal.com/gui/file/5be8efb1738adcb0a199f0ee64d758e946700de1cf750ca03fd83b817f113363/detection) | 0 | 0 | 2026-10-21 12:42:34 |
+| [VKey.exe](https://www.virustotal.com/gui/file/2b09dcbc9f8f8787523bd6c88141c82c8d90ef5cc1f759ed10579fc5bf295808/detection) | 1 | 0 | 2026-10-21 12:43:03 |
+| [VKeyClassic.zip](https://www.virustotal.com/gui/file/33f8729bc8c641622ca266d43941cc94dc24a43d10c7a048e56a75d275f239fa/detection) | 1 | 0 | 2026-10-21 12:42:47 |
+| [VKeyClassic.exe](https://www.virustotal.com/gui/file/6a134b5216c0d7e4bd445f91eb57dbd81edc4d7e4587a7835e53a28cb44457c2/detection) | 2 | 0 | 2026-10-21 12:43:19 |
+| [vkey_engine.dll](https://www.virustotal.com/gui/file/d63cbe59e2f4998d802a7e1a5f2cc5ba0a51a1048491a3511016b9bbb5cb6397/detection) | 0 | 0 | 2026-10-21 12:43:35 |
 
 VKey sử dụng hook bàn phím và gửi phím tổng hợp để xử lý tiếng Việt; các hành vi này có thể bị bộ quét nhận nhầm. Đây là khả năng giải thích cảnh báo, chưa phải kết luận từ các hãng antivirus. Xem [hướng dẫn kiểm tra bản tải](https://github.com/phatMT97/VKey/blob/Main/docs/ANTIVIRUS.md).
 
