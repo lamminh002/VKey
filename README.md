@@ -41,6 +41,9 @@
 >
 > **📖 Hướng dẫn sử dụng:** Xem hướng dẫn chi tiết các tính năng, phím tắt và câu hỏi thường gặp (FAQ) tại **[Hướng dẫn sử dụng trực tuyến (vkey.qd.je/guide)](https://www.vkey.qd.je/guide/)** (hoặc xem bản tài liệu tại [GUIDE.md](docs/GUIDE.md)).
 
+> [!WARNING]
+> **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode và phải cập nhật thủ công.** SignPath không chấp thuận ký bản tiêu chuẩn vì Sciter là thành phần mã nguồn đóng. Phương án chỉ ký bản Classic đang chờ phê duyệt lại; Classic vẫn được phát hành chưa ký trong thời gian chờ. Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo, chặn chạy hoặc cách ly file. Xem [thông báo ký số](#ký-số-và-cập-nhật-thủ-công) và [release note](RELEASE_NOTES.md).
+
 ## Giới thiệu
 
 **VKey** là bộ gõ tiếng Việt mã nguồn mở cho Windows, được viết lại từ hoàn toàn [NextKey](https://github.com/phatMT97/VKey/tree/feat/UI-Next) (một fork của [OpenKey](https://github.com/tuyenvm/OpenKey) của Mai Vũ Tuyên).
@@ -95,7 +98,7 @@ Engine mới, kiến trúc mới, C++20, hiệu năng cao, giao diện Glassmorp
   Glassmorphism, auto Light/Dark, tùy biến icon, hỗ trợ song ngữ
 
 * **High Performance Engine**
-  Độ trễ thấp, hỗ trợ song song Hook Engine & TSF (Context-Aware) để bắt ngữ cảnh tốt nhất, auto update, [tối ưu bảo mật](docs/SECURITY.md)
+  Độ trễ thấp, hỗ trợ song song Hook Engine & TSF (Context-Aware) để bắt ngữ cảnh tốt nhất, [tối ưu bảo mật](docs/SECURITY.md). Bản v4.3 cần cập nhật thủ công do chưa được ký Authenticode.
 
 * **Game-Friendly Telex**
   Bật **Chế độ game** cho game đó (một phím tắt, ngay trong game) là chơi với Telex bình thường — WASD di chuyển mượt, không cần chuyển Simple Telex hay tắt tiếng Việt. [Hướng dẫn](https://www.vkey.qd.je/guide/#game-mode)
@@ -151,10 +154,19 @@ browser hiện tại, chuyển qua lại hai tab sẽ tự đổi V → E → V.
 xóa khi browser restart; hard rule vẫn được giữ. Xem protocol, giới hạn và cách
 xử lý lỗi tại [docs/BROWSER_EXTENSION.md](docs/BROWSER_EXTENSION.md).
 
-> **Ký số (Code signing) & Bản Classic:** 
-> - Trong bản **v4.3, SignPath Foundation chỉ ký ba binary GPL-3.0 của bản Classic chính thức**: `VKeyClassic.exe`, `VKeyTSF.dll` và `VKeyWatchdog.exe`. Watchdog được phát hành riêng dưới tên `VKeyClassicWatchdog.exe`; VKey tải và lưu cạnh ứng dụng dưới tên `VKeyWatchdog.exe`. Cả ba được tạo cùng nhau từ cấu hình Foundation riêng, với Engine Rust bị compile-out hoàn toàn và không có Sciter.
-> - Phạm vi ký Foundation **không áp dụng** cho `VKey.exe`/VKeyApp, `sciter.dll`, installer, Engine Rust (`vkey_engine.dll`) hoặc bất kỳ thành phần proprietary nào. `VKeyBrowserHost.exe` có mã nguồn GPL-3.0 công khai nhưng không nằm trong request ba file hiện tại. Bản tiêu chuẩn (Sciter UI) v4.3 chưa được ký Authenticode; Windows SmartScreen có thể cảnh báo khi chạy lần đầu (chọn *More info* → *Run anyway*). Các bản v4.0–v4.2 trước đó đều được ký Authenticode đầy đủ.
-> - Cách xác minh bản tải hiện nay: xem mục [Xác minh bản tải](#xác-minh-bản-tải-verify-release) bên dưới.
+### Ký số và cập nhật thủ công
+
+- **Cả bản tiêu chuẩn (Sciter) và Classic v4.3 đều phát hành chưa ký Authenticode.** SignPath không chấp thuận ký bản tiêu chuẩn vì giao diện sử dụng Sciter, một thành phần mã nguồn đóng. Đợt phát hành này không gửi package tới SignPath.
+- **Phương án chỉ ký Classic đang chờ phê duyệt lại.** Phạm vi đề xuất gồm `VKeyClassic.exe`, `VKeyTSF.dll` và `VKeyWatchdog.exe`, được build riêng với Rust tắt hoàn toàn và không có Sciter. Classic vẫn được phát hành chưa ký cùng bản Sciter trong thời gian chờ.
+- **Windows SmartScreen và antivirus có thể cảnh báo hoặc chặn file**, kể cả cách ly/xóa file tải về. Xác minh nguồn tải theo mục bên dưới trước khi xử lý cảnh báo; xem [hướng dẫn antivirus](docs/ANTIVIRUS.md).
+- **Không thể tự động cập nhật lên bản chưa ký**, kể cả từ v4.2 lên v4.3. Trình cập nhật vẫn yêu cầu chữ ký Authenticode hợp lệ của SignPath Foundation và sẽ từ chối gói chưa ký.
+
+Để cập nhật thủ công:
+
+1. Tải `VKey.zip` / `VKey-x64.zip` (Sciter) hoặc `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) từ [Releases chính thức](https://github.com/phatMT97/VKey/releases) và [xác minh bản tải](#xác-minh-bản-tải-verify-release).
+2. Thoát VKey đang chạy, giải nén gói mới vào thư mục riêng, rồi chạy `VKey.exe` (Sciter) hoặc `VKeyClassic.exe` (Classic) trong thư mục đó. Không trộn file của hai bản vào cùng thư mục.
+
+Các bản v4.0–v4.2 trước đó được ký Authenticode bởi SignPath Foundation.
 
 ---
 
@@ -173,7 +185,7 @@ cosign verify-blob VKey.zip \
   --certificate-identity-regexp="https://github.com/phatMT97/VKey/"
 ```
 
-> **Lưu ý:** Attestation Sigstore ở trên là cách xác minh chính thức cho bản **v4.3 tiêu chuẩn** — nó chứng minh file được build từ đúng mã nguồn trong repo này. Trong bản **v4.3 Classic**, chỉ `VKeyClassic.exe`, `VKeyTSF.dll` và Watchdog phát hành riêng dưới tên `VKeyClassicWatchdog.exe` thuộc phạm vi Authenticode của Foundation (`CN=SignPath Foundation`). Bản v4.3 tiêu chuẩn (Sciter) và Browser Host **không** thuộc phạm vi này, nên `(Get-AuthenticodeSignature VKey.exe).Status` sẽ không trả về `Valid`; đó là điều bình thường với bản tiêu chuẩn v4.3, không phải dấu hiệu file giả. (Các bản v4.0–v4.2 có ký Authenticode với publisher `CN=SignPath Foundation`.)
+> **Lưu ý:** Attestation Sigstore ở trên xác minh nguồn gốc cả hai bản **Sciter và Classic v4.3**; với Classic, thay `VKey.zip` bằng `VKeyClassic.zip` trong lệnh xác minh. Attestation không thay thế chữ ký Authenticode, không gỡ cảnh báo SmartScreen và không làm trình cập nhật chấp nhận gói chưa ký. Cả `VKey.exe` và `VKeyClassic.exe` v4.3 đều có trạng thái `NotSigned`. Phương án ký Classic vẫn chờ phê duyệt lại. Các bản v4.0–v4.2 có ký Authenticode với publisher `CN=SignPath Foundation`.
 >
 > Một số phần mềm diệt virus có thể cảnh báo VKey theo **hành vi** (bộ gõ nào cũng phải hook bàn phím + gửi phím) — đây là cảnh báo nhầm, và bản không ký số dễ bị cảnh báo hơn. Cách khôi phục & loại trừ: **[docs/ANTIVIRUS.md](docs/ANTIVIRUS.md)**.
 
@@ -213,7 +225,7 @@ VKey gồm ba lớp:
 |-----|--------|-------|
 | **VKeyEngine** | Static lib | Engine gõ tiếng Việt thuần C++20 (Telex, VNI), kiểm tra chính tả, chuyển bảng mã. Không phụ thuộc platform. |
 | **VKeyCore** | Static lib | Lớp platform — shared memory IPC, quản lý config, smart switch. |
-| **VKeyApp** | Win32 EXE | Ứng dụng GUI với Sciter.JS, hook engine, tray icon, tự cập nhật. |
+| **VKeyApp** | Win32 EXE | Ứng dụng GUI với Sciter.JS, hook engine, tray icon, kiểm tra cập nhật (v4.3 cần cài thủ công). |
 | **VKeyTSF** | DLL | Tích hợp Text Services Framework — đăng ký như Windows input method. |
 
 ### Tối ưu bộ nhớ
@@ -299,7 +311,7 @@ New engine, new architecture, C++20, high performance, Glassmorphism UI. Engine 
 **System**
 - **Parallel Engine** — Parallel Hook Engine and TSF (Context-Aware) support for superior tracking and document awareness
 - **TSF Engine** — Text Services Framework integration for modern applications, with per-app TSF selection
-- **Auto-update** — Built-in update checker and installer
+- **Update checker** — Unsigned v4.3 releases require a manual download and installation
 - **[Security hardened](docs/SECURITY.md)** — Code optimized to minimize security vulnerabilities
 - **High performance** — Optimized system processing
 
@@ -323,7 +335,10 @@ winget install PhatMT97.VKey.Classic
 
 *(Recommended)* Disable other IMEs (Unikey, EVKey) before running to avoid conflicts.
 
-> **Code signing & Classic edition:** In **v4.3, SignPath Foundation signing applies only to three GPL-3.0 Classic binaries**: `VKeyClassic.exe`, `VKeyTSF.dll`, and `VKeyWatchdog.exe`. The signed watchdog is a separate release asset named `VKeyClassicWatchdog.exe`. They are built together by a dedicated Foundation configuration with the Rust engine compiled out and no Sciter dependency. Foundation signing does **not** apply to `VKey.exe`/VKeyApp, `sciter.dll`, installers, `vkey_engine.dll`, or any proprietary component. `VKeyBrowserHost.exe` is public GPL-3.0 code but is outside the current three-file request. The standard Sciter edition is therefore not Authenticode-signed and may trigger Windows SmartScreen. Releases v4.0–v4.2 were Authenticode-signed. To verify any download, use the Sigstore attestation described above.
+> [!WARNING]
+> **Code signing and manual updates:** **Both Sciter and Classic v4.3 are released unsigned.** SignPath declined signing the standard edition because Sciter is a closed-source component. No package is being submitted to SignPath for this release. The proposal to sign only the three C++-only Classic binaries (`VKeyClassic.exe`, `VKeyTSF.dll`, and `VKeyWatchdog.exe`) is awaiting renewed approval; Classic is released unsigned alongside Sciter while approval is pending.
+>
+> Windows SmartScreen or antivirus software may warn, block execution, or quarantine files. **Automatic installation of unsigned updates, including v4.2 → v4.3, does not work** because the updater requires a valid SignPath Foundation Authenticode signature. Download `VKey.zip` / `VKey-x64.zip` (Sciter) or `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) from the official [Releases](https://github.com/phatMT97/VKey/releases), verify its attestation, exit VKey, extract to a separate folder, and run the new `VKey.exe` or `VKeyClassic.exe`. Keep the two editions in separate folders. For Classic attestation verification, replace `VKey.zip` with `VKeyClassic.zip` in the command above. Sigstore attestations verify provenance but do not replace Authenticode or remove SmartScreen warnings. Releases v4.0–v4.2 were Authenticode-signed.
 
 ### Building
 
@@ -340,7 +355,7 @@ cmake --build build --config Release --target VKeyApp
 |-------|--------|-------------|
 | **VKeyEngine** | Static lib | Pure C++20 Vietnamese input engines (Telex, VNI), spell checker, code table converter. Zero platform dependencies. |
 | **VKeyCore** | Static lib | Platform layer — shared memory IPC, configuration management, smart switch. |
-| **VKeyApp** | Win32 EXE | GUI application with Sciter.JS UI, hook engine, tray icon, auto-update. |
+| **VKeyApp** | Win32 EXE | GUI application with Sciter.JS UI, hook engine, tray icon, update checker (v4.3 requires manual installation). |
 | **VKeyTSF** | DLL | Text Services Framework integration — registers as a Windows input method. |
 
 #### Memory Optimization
@@ -366,7 +381,7 @@ VKey is built with a lean architecture and no heavy runtime dependencies, keepin
       <a href="https://signpath.org/"><img src="https://signpath.org/assets/favicon-50x50.png" alt="SignPath" width="40"></a>
     </td>
     <td>
-      Free code signing on Windows for releases v4.0–v4.2 and, in v4.3, only the three approved VKeyClassic binaries, provided by <a href="https://signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>
+      Free code signing on Windows for past releases v4.0–v4.2 was provided by <a href="https://signpath.io/">SignPath.io</a>, certificate by <a href="https://signpath.org/">SignPath Foundation</a>. The proposal to sign only Classic for v4.3 is awaiting renewed approval.
     </td>
   </tr>
 </table>
@@ -382,7 +397,7 @@ VKey is built with a lean architecture and no heavy runtime dependencies, keepin
 - Tham khảo config TSF từ [VietType](https://github.com/dinhngtu/VietType)
 - Tham khảo cách xử lý clipboard input từ [SigmaLib](https://github.com/phamhoangnhat/SigmaLib) của Phạm Hoàng Nhật
 - Tham khảo quy tắt tiếng việt từ [dotnetkey](https://code.google.com/archive/p/dotnetkey/downloads)
-- Dịch vụ ký số (Authenticode) trên Windows cho các bản v4.0–v4.2 và riêng ba binary được phê duyệt của VKeyClassic trong v4.3 cung cấp miễn phí bởi [SignPath.io](https://signpath.io/), chứng chỉ ký số bởi [SignPath Foundation](https://signpath.org/)
+- Dịch vụ ký số (Authenticode) trên Windows cho các bản v4.0–v4.2 trước đây được cung cấp miễn phí bởi [SignPath.io](https://signpath.io/), chứng chỉ ký số bởi [SignPath Foundation](https://signpath.org/). Phương án chỉ ký Classic cho v4.3 đang chờ phê duyệt lại.
 
 ### Top Testers
 Cảm ơn các thành viên cộng đồng đã test và góp ý:

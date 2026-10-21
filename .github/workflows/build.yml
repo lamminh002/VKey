@@ -220,13 +220,11 @@ jobs:
           path: unsigned-sciter-binaries/
           retention-days: 7
 
-  # Manual Classic builds remain available for unsigned development checks.
-  # Official Foundation review/signing uses the isolated
-  # vkeyclassic-foundation-signing.yml workflow instead; tag releases must not
-  # obtain Classic binaries from this mixed workflow.
+  # Tag releases include unsigned C++-only Classic alongside unsigned Sciter.
+  # Foundation signing remains isolated in its manual workflow pending approval.
   build-classic:
     needs: validate
-    if: github.event_name == 'workflow_dispatch' && inputs.include_classic
+    if: startsWith(github.ref, 'refs/tags/') || inputs.include_classic
     runs-on: windows-2022
     outputs:
       artifact-id: ${{ steps.upload-classic.outputs.artifact-id }}
@@ -416,8 +414,10 @@ jobs:
               Copy-Item "classic-binaries/vkey_engine.dll.sig" "dist-classic/" -Force
               Copy-Item "classic-binaries/vkey_engine.LICENSE.txt" "dist-classic/" -Force
             }
-            # Classic reaches this workflow only through workflow_dispatch.
-            # It is always an unsigned test artifact and never a release input.
+            # Companion release names differ by edition; keep their build bytes
+            # intact so the hashes embedded in VKeyClassic.exe still match.
+            Copy-Item "classic-binaries/VKeyWatchdog.exe" "VKeyClassicWatchdog.exe" -Force
+            Copy-Item "classic-binaries/VKeyBrowserHost.exe" "VKeyClassicBrowserHost.exe" -Force
             if ("${{ needs.build-sciter.result }}" -ne "success") {
               Copy-Item "dist-classic/*" "upload-payload/" -Force
               Copy-Item "classic-binaries/VKeyWatchdog.exe" "upload-payload/" -Force
@@ -444,7 +444,7 @@ jobs:
           }
 
           if ("${{ needs.build-classic.result }}" -eq "success") {
-            foreach ($path in @("dist-classic/VKeyClassic.exe", "dist-classic/VKeyTSF.dll", "dist-classic/VKeyWatchdog.exe", "dist-classic/VKeyBrowserHost.exe")) {
+            foreach ($path in @("dist-classic/VKeyClassic.exe", "dist-classic/VKeyTSF.dll", "VKeyClassicWatchdog.exe", "VKeyClassicBrowserHost.exe")) {
               $signature = Get-AuthenticodeSignature $path
               if ($signature.Status -ne "NotSigned") {
                 throw "combined workflow must not carry a Foundation signature: $path"
@@ -563,6 +563,29 @@ jobs:
           Compress-Archive -Path "dist/*" -DestinationPath VKey.zip
           Copy-Item VKey.zip VKey-x64.zip -Force
 
+      - name: Zip Classic Release
+        if: startsWith(github.ref, 'refs/tags/') && needs.build-classic.result == 'success'
+        shell: powershell
+        run: |
+          $expected = @(
+            "THIRD_PARTY_NOTICES.txt",
+            "VKeyClassic.exe",
+            "VKeyTSF.dll"
+          ) | Sort-Object
+          $actual = @(
+            Get-ChildItem "dist-classic" -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          $directories = @(Get-ChildItem "dist-classic" -Directory -Recurse)
+          if ($directories.Count -ne 0 -or (Compare-Object $expected $actual)) {
+            $directories.FullName | Write-Output
+            $actual | Write-Output
+            throw "Classic release package differs from the three-file allowlist"
+          }
+          Compress-Archive -Path "dist-classic/*" -DestinationPath VKeyClassic.zip
+          Copy-Item VKeyClassic.zip VKeyClassic-x64.zip -Force
+
       # --- SHA-256 checksums ---
       - name: Generate SHA-256 checksums
         if: startsWith(github.ref, 'refs/tags/')
@@ -576,6 +599,12 @@ jobs:
             $files += "VKey-x64.zip"
             $files += "VKeyBrowserHost.exe"
             $files += "VKeyWatchdog.exe"
+          }
+          if ("${{ needs.build-classic.result }}" -eq "success") {
+            $files += "VKeyClassic.zip"
+            $files += "VKeyClassic-x64.zip"
+            $files += "VKeyClassicBrowserHost.exe"
+            $files += "VKeyClassicWatchdog.exe"
           }
           $files += "vkey_engine.dll"
           $files += "vkey_engine.dll.sig"
@@ -600,6 +629,14 @@ jobs:
             VKeyBrowserHost.exe.sha256
             VKeyWatchdog.exe
             VKeyWatchdog.exe.sha256
+            VKeyClassic.zip
+            VKeyClassic.zip.sha256
+            VKeyClassic-x64.zip
+            VKeyClassic-x64.zip.sha256
+            VKeyClassicBrowserHost.exe
+            VKeyClassicBrowserHost.exe.sha256
+            VKeyClassicWatchdog.exe
+            VKeyClassicWatchdog.exe.sha256
             vkey_engine.dll
             vkey_engine.dll.sha256
             vkey_engine.dll.sig
@@ -641,9 +678,9 @@ jobs:
 
 
   publish-release:
-    name: Attest and publish exact standard-release assets
+    name: Attest and publish exact Sciter and Classic release assets
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [validate, build-sciter, package]
+    needs: [validate, build-sciter, build-classic, package]
     runs-on: windows-2022
     environment:
       name: vkey-standard-release
@@ -700,6 +737,14 @@ jobs:
             "VKeyBrowserHost.exe.sha256",
             "VKeyWatchdog.exe",
             "VKeyWatchdog.exe.sha256",
+            "VKeyClassic.zip",
+            "VKeyClassic.zip.sha256",
+            "VKeyClassic-x64.zip",
+            "VKeyClassic-x64.zip.sha256",
+            "VKeyClassicBrowserHost.exe",
+            "VKeyClassicBrowserHost.exe.sha256",
+            "VKeyClassicWatchdog.exe",
+            "VKeyClassicWatchdog.exe.sha256",
             "vkey_engine.dll",
             "vkey_engine.dll.sha256",
             "vkey_engine.dll.sig",
@@ -715,7 +760,7 @@ jobs:
           if ($directories.Count -ne 0 -or (Compare-Object $expected $actual)) {
             $directories.FullName | Write-Output
             $actual | Write-Output
-            throw "Standard release artifact differs from the fourteen-file allowlist"
+            throw "Release artifact differs from the twenty-two-file allowlist"
           }
 
           foreach ($name in @(
@@ -723,6 +768,10 @@ jobs:
             "VKey-x64.zip",
             "VKeyBrowserHost.exe",
             "VKeyWatchdog.exe",
+            "VKeyClassic.zip",
+            "VKeyClassic-x64.zip",
+            "VKeyClassicBrowserHost.exe",
+            "VKeyClassicWatchdog.exe",
             "vkey_engine.dll",
             "vkey_engine.dll.sig"
           )) {
@@ -739,13 +788,14 @@ jobs:
           }
 
           Add-Type -AssemblyName System.IO.Compression.FileSystem
-          $expectedEntries = @(
-            "THIRD_PARTY_NOTICES.txt",
-            "VKey.exe",
-            "VKeyTSF.dll",
-            "sciter.dll"
-          ) | Sort-Object
-          foreach ($archiveName in @("VKey.zip", "VKey-x64.zip")) {
+          $packageEntries = @{
+            "VKey.zip" = @("THIRD_PARTY_NOTICES.txt", "VKey.exe", "VKeyTSF.dll", "sciter.dll")
+            "VKey-x64.zip" = @("THIRD_PARTY_NOTICES.txt", "VKey.exe", "VKeyTSF.dll", "sciter.dll")
+            "VKeyClassic.zip" = @("THIRD_PARTY_NOTICES.txt", "VKeyClassic.exe", "VKeyTSF.dll")
+            "VKeyClassic-x64.zip" = @("THIRD_PARTY_NOTICES.txt", "VKeyClassic.exe", "VKeyTSF.dll")
+          }
+          foreach ($archiveName in $packageEntries.Keys) {
+            $expectedEntries = @($packageEntries[$archiveName] | Sort-Object)
             $archive = [System.IO.Compression.ZipFile]::OpenRead((Join-Path $root $archiveName))
             try {
               $entries = @(
@@ -756,7 +806,7 @@ jobs:
               )
               if (Compare-Object $expectedEntries $entries) {
                 $entries | Write-Output
-                throw "$archiveName differs from the four-file package allowlist"
+                throw "$archiveName differs from its edition-specific package allowlist"
               }
             }
             finally {
@@ -770,6 +820,17 @@ jobs:
           subject-path: |
             ${{ runner.temp }}/release-assets/VKey.zip
             ${{ runner.temp }}/release-assets/VKey-x64.zip
+            ${{ runner.temp }}/release-assets/VKeyClassic.zip
+            ${{ runner.temp }}/release-assets/VKeyClassic-x64.zip
+
+      - name: Attest edition-specific companions
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/release-assets/VKeyWatchdog.exe
+            ${{ runner.temp }}/release-assets/VKeyBrowserHost.exe
+            ${{ runner.temp }}/release-assets/VKeyClassicWatchdog.exe
+            ${{ runner.temp }}/release-assets/VKeyClassicBrowserHost.exe
 
       - name: Attest external engine and detached signature
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -827,6 +888,10 @@ jobs:
             "VKey-x64.zip.sha256",
             "VKeyBrowserHost.exe.sha256",
             "VKeyWatchdog.exe.sha256",
+            "VKeyClassic.zip.sha256",
+            "VKeyClassic-x64.zip.sha256",
+            "VKeyClassicBrowserHost.exe.sha256",
+            "VKeyClassicWatchdog.exe.sha256",
             "vkey_engine.dll.sha256",
             "vkey_engine.dll.sig.sha256",
             "vkey_engine.dll.sig",
@@ -835,6 +900,10 @@ jobs:
             "VKey-x64.zip",
             "VKeyBrowserHost.exe",
             "VKeyWatchdog.exe",
+            "VKeyClassic.zip",
+            "VKeyClassic-x64.zip",
+            "VKeyClassicBrowserHost.exe",
+            "VKeyClassicWatchdog.exe",
             "vkey_engine.dll"
           )
           $missingAssets = @()
@@ -892,12 +961,46 @@ jobs:
       url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
     permissions:
       contents: read
+    env:
+      WINGET_TOKEN: ${{ secrets.VKEY_STANDARD_WINGET_TOKEN }}
     steps:
       # winget-releaser only updates an existing package. PhatMT97.VKey must
       # already be seeded as zip + NestedInstaller in microsoft/winget-pkgs.
       - name: Submit VKey (Sciter) to WinGet
+        if: env.WINGET_TOKEN != ''
         uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         with:
           identifier: PhatMT97.VKey
           installers-regex: '^VKey-x64\.zip$'
           token: ${{ secrets.VKEY_STANDARD_WINGET_TOKEN }}
+
+      - name: Report missing WinGet credential
+        if: env.WINGET_TOKEN == ''
+        shell: bash
+        run: echo "WinGet submission skipped; configure VKEY_STANDARD_WINGET_TOKEN in vkey-standard-release." >> "$GITHUB_STEP_SUMMARY"
+
+  submit-classic-winget:
+    name: Submit unsigned Classic release to WinGet
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: publish-release
+    runs-on: windows-2022
+    environment:
+      name: vkey-standard-release
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    permissions:
+      contents: read
+    env:
+      WINGET_TOKEN: ${{ secrets.VKEY_STANDARD_WINGET_TOKEN }}
+    steps:
+      - name: Submit VKey Classic to WinGet
+        if: env.WINGET_TOKEN != ''
+        uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
+        with:
+          identifier: PhatMT97.VKey.Classic
+          installers-regex: '^VKeyClassic-x64\.zip$'
+          token: ${{ secrets.VKEY_STANDARD_WINGET_TOKEN }}
+
+      - name: Report missing WinGet credential
+        if: env.WINGET_TOKEN == ''
+        shell: bash
+        run: echo "WinGet submission skipped; configure VKEY_STANDARD_WINGET_TOKEN in vkey-standard-release." >> "$GITHUB_STEP_SUMMARY"

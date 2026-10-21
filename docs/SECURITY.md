@@ -12,7 +12,7 @@ IME cục bộ trên Windows cá nhân. Kẻ tấn công chính: phần mềm đ
 
 | Biện pháp | Mô tả |
 |-----------|-------|
-| **Authenticode signature + publisher pin** | Trước khi cài, mỗi file `.exe`/`.dll` trong gói ứng dụng đã ký được xác minh qua `WinVerifyTrust` (chuỗi tin cậy tới root + kiểm tra thu hồi) và ghim đúng publisher `SignPath Foundation`. Đây là lớp chống giả mạo thật sự — chứng minh *ai* đã ký mã sắp chạy.<br>**Hiện trạng v4.3:** chỉ ba binary Classic C++-only (`VKeyClassic.exe`, `VKeyTSF.dll`, Watchdog phát hành riêng dưới tên `VKeyClassicWatchdog.exe`) đi qua SignPath. Gói tiêu chuẩn Sciter và optional `vkey_engine.dll` phát hành ngoài ZIP không ký Authenticode; engine được xác thực bằng pin đã compile như mô tả ở mục 4. Vì bản Sciter không qua publisher pin, cập nhật tự động lên bản đó **không hoạt động** và người dùng phải cài thủ công. Đây là fail-closed đúng thiết kế |
+| **Authenticode signature + publisher pin** | Trước khi cài, mỗi file `.exe`/`.dll` trong gói ứng dụng đã ký được xác minh qua `WinVerifyTrust` (chuỗi tin cậy tới root + kiểm tra thu hồi) và ghim đúng publisher `SignPath Foundation`. Đây là lớp chống giả mạo thật sự — chứng minh *ai* đã ký mã sắp chạy.<br>**Hiện trạng v4.3:** SignPath không chấp thuận ký bản tiêu chuẩn vì Sciter là thành phần mã nguồn đóng. Phương án chỉ ký ba binary Classic C++-only (`VKeyClassic.exe`, `VKeyTSF.dll`, `VKeyWatchdog.exe`) đang chờ phê duyệt lại; cả Classic và Sciter v4.3 đều phát hành chưa ký. Đợt phát hành này không gửi package tới SignPath. Cả hai gói ứng dụng và optional `vkey_engine.dll` phát hành ngoài ZIP không ký Authenticode; engine được xác thực như mô tả ở mục 4. Cập nhật tự động lên gói chưa ký, kể cả từ v4.2 lên v4.3, **không hoạt động** và người dùng phải cài thủ công. Đây là fail-closed đúng thiết kế; Sigstore attestation không thay thế publisher pin |
 | **SHA-256 hash verification** | Mỗi bản cập nhật đi kèm file `.sha256`. Sau khi tải, VKey tính hash thực tế bằng Windows CNG (bcrypt) và so khớp trước khi giải nén. *Lưu ý:* sidecar `.sha256` tải cùng nguồn với ZIP → chỉ chống **hỏng file/CDN**, không chống giả mạo (nguồn bị chiếm là chiếm cả hai). Chống giả mạo do lớp Authenticode ở trên đảm nhận |
 | **URL domain whitelist** | Chỉ chấp nhận tải từ `https://github.com/`, `https://objects.githubusercontent.com/`, `https://codeload.github.com/`. Từ chối HTTP và domain lạ |
 | **PowerShell command escaping** | Escape ký tự `'` trong đường dẫn trước khi truyền vào `Expand-Archive`, chống command injection |
@@ -88,8 +88,8 @@ IME cục bộ trên Windows cá nhân. Kẻ tấn công chính: phần mềm đ
 | Biện pháp | Mô tả |
 |-----------|-------|
 | **Tách rời khỏi các gói Release** | Hai tiện ích không nằm trong ZIP tiêu chuẩn hoặc Classic. Bản tiêu chuẩn phát hành `VKeyWatchdog.exe` và `VKeyBrowserHost.exe`; Classic phát hành `VKeyClassicWatchdog.exe` và `VKeyClassicBrowserHost.exe`. Khi bật tiện ích chưa có, VKey hỏi trước khi tải đúng asset của bản đang chạy, rồi lưu cạnh ứng dụng dưới tên `VKeyWatchdog.exe` hoặc `VKeyBrowserHost.exe` |
-| **Mã gắn với phiên bản VKey** | Trong lúc build, SHA-256 của từng file tiện ích được nhúng vào ứng dụng chính. Bản Classic còn nhúng mã của Browser Host đi kèm và các asset bản tiêu chuẩn cùng phiên bản. VKey so khớp toàn bộ byte trước khi cài hoặc chạy: tác vụ Watchdog và native-messaging manifest mới đều gọi VKey để kiểm tra ngay trước khi mở tiện ích. File từ bản build khác hoặc bị sửa sẽ không khớp; chỉ so số phiên bản trong PE là không đủ vì giá trị đó có thể bị giả mạo |
-| **Không dùng file `.sig` rời** | Hai tiện ích bản tiêu chuẩn không cần chứng chỉ Authenticode hoặc file `.sig` bên cạnh: ứng dụng chính giữ mã xác thực của chúng. Riêng watchdog trong gói Classic đã được SignPath ký sau khi build, nên VKey cho phép chữ ký Foundation hợp lệ khi phiên bản PE khớp chính xác phiên bản ứng dụng |
+| **Mã gắn với phiên bản VKey** | Trong lúc build, SHA-256 của từng file tiện ích được nhúng vào ứng dụng chính. Cả Sciter và Classic chưa ký đều nhúng mã của các tiện ích từ đúng cây build của mình; cấu hình Foundation dự kiến còn hỗ trợ pin các asset tiêu chuẩn cùng phiên bản. VKey so khớp toàn bộ byte trước khi cài hoặc chạy: tác vụ Watchdog và native-messaging manifest mới đều gọi VKey để kiểm tra ngay trước khi mở tiện ích. File từ bản build khác hoặc bị sửa sẽ không khớp; chỉ so số phiên bản trong PE là không đủ vì giá trị đó có thể bị giả mạo |
+| **Không dùng file `.sig` rời** | Hai tiện ích bản tiêu chuẩn không cần chứng chỉ Authenticode hoặc file `.sig` bên cạnh: ứng dụng chính giữ mã xác thực của chúng. Với watchdog Classic, mã nguồn còn hỗ trợ chữ ký Foundation hợp lệ khi phiên bản PE khớp chính xác phiên bản ứng dụng; đây là khả năng dành cho phương án ký Classic đang chờ phê duyệt lại, chưa phải trạng thái phát hành v4.3 |
 | **Tải về an toàn & Thay thế nguyên tử** | Trình cài đặt tiện ích tải binary từ GitHub Releases qua HTTPS, lưu tạm dưới dạng file `.tmp`, xác thực mã đã nhúng hoặc watchdog Classic đã ký trước khi di chuyển/thay thế nguyên tử (atomic rename/replace) vào thư mục VKey |
 | **Phát triển & Debug cục bộ** | Trong chế độ Debug hoặc khi bật tùy chọn biên dịch `VKEY_ALLOW_UNSIGNED_EXTENSIONS`, cổng kiểm tra cho phép bỏ qua xác thực tiện ích và TSF DLL để lập trình viên thử nghiệm binary tự biên dịch cục bộ |
 
@@ -103,9 +103,10 @@ Watchdog để tạo tác vụ mới đi qua VKey.
 
 Windows nạp `VKeyTSF.dll` trực tiếp qua đăng ký COM trong ứng dụng đích. Kiểm tra
 SHA-256 trong `VKey.exe`/`VKeyClassic.exe` chỉ bảo vệ những đường nạp và kích hoạt
-do VKey điều khiển; nó không thể chạy trước mọi lần Windows nạp DLL. Bản Classic
-có thêm chữ ký Authenticode của Foundation. Với bản tiêu chuẩn chưa ký, cần bảo vệ
-thư mục cài đặt hoặc dùng chính sách kiểm soát mã của Windows nếu cần bảo đảm ở
+do VKey điều khiển; nó không thể chạy trước mọi lần Windows nạp DLL. Cả Sciter
+và Classic v4.3 đều chưa ký Authenticode; phương án ký Foundation cho Classic
+vẫn chờ phê duyệt lại. Cần bảo vệ thư mục cài đặt hoặc dùng chính sách kiểm soát
+mã của Windows nếu cần bảo đảm ở
 cấp hệ điều hành.
 
 ---

@@ -1,12 +1,19 @@
 # VKey v4.3
 
-[![VKeyClassic binaries signed by SignPath](https://img.shields.io/badge/SignPath-VKeyClassic_binaries_only-blue)](https://signpath.io)
-
-> ⚠️ **Lưu ý quan trọng về Chữ ký số & Cập nhật tự động (Code Signing & Auto-Update)**
+> [!WARNING]
+> **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode — cần tải và cập nhật thủ công**
 >
-> 1. **Phạm vi ký Foundation**: Trong phiên bản v4.3, SignPath Foundation chỉ ký ba binary GPL-3.0 của gói Classic chính thức: `VKeyClassic.exe`, `VKeyTSF.dll` và `VKeyWatchdog.exe`. `VKey.exe`/VKeyApp, `sciter.dll`, installer, Engine Rust (`vkey_engine.dll`) và mọi thành phần proprietary đều nằm ngoài phạm vi ký này. `VKeyBrowserHost.exe` cũng là mã nguồn GPL-3.0 công khai nhưng không nằm trong request ba file hiện tại. Bản tiêu chuẩn (Sciter UI) chưa được ký Authenticode nên có thể bị Windows SmartScreen hoặc phần mềm diệt virus cảnh báo (chọn *More info* → *Run anyway* để tiếp tục sử dụng).
-> 2. **Bản Classic chính thức là 100% mã nguồn mở (Open Source)**: Ba binary được ký được build cùng nhau từ cấu hình Foundation riêng, với Rust bị compile-out hoàn toàn và không include, link, load, bundle, install hoặc download Rust/Sciter. Biến thể Classic + Rust trên manual workflow chỉ dành cho maintainer kiểm thử, không ký số và không được phát hành.
-> 3. **Cần tải bản v4.3 thủ công**: Do v4.2 yêu cầu kiểm tra chữ ký số an toàn khi nâng cấp, tính năng cập nhật tự động từ v4.2 lên v4.3 (bản tiêu chuẩn) sẽ không hoạt động. Người dùng đang ở phiên bản v4.2 vui lòng **tải và cài đặt bản v4.3 thủ công** từ trang phát hành GitHub Release.
+> 1. **Lý do chưa ký:** SignPath không chấp thuận ký bản tiêu chuẩn vì giao diện Sciter là thành phần mã nguồn đóng (closed-source). Đợt phát hành này không gửi package tới SignPath.
+> 2. **Classic phát hành chưa ký trong lúc chờ phê duyệt lại:** Phương án chỉ ký ba binary GPL-3.0 của Classic (`VKeyClassic.exe`, `VKeyTSF.dll`, `VKeyWatchdog.exe`), build riêng với Rust tắt hoàn toàn và không có Sciter, đang được xét duyệt lại. Đợt này phát hành **cả Sciter lẫn Classic chưa ký**, không chờ phê duyệt ký số để phát hành Classic.
+> 3. **Windows/antivirus có thể chặn:** Do thiếu chữ ký Authenticode, Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo, chặn chạy, cách ly hoặc xóa file. Hãy [xác minh nguồn gốc bản tải](https://github.com/phatMT97/VKey#xác-minh-bản-tải-verify-release) trước khi xử lý cảnh báo; xem [hướng dẫn antivirus](docs/ANTIVIRUS.md). Sigstore attestation không thay thế Authenticode và không gỡ cảnh báo SmartScreen.
+> 4. **Cập nhật tự động không cài được bản chưa ký:** Trình cập nhật vẫn yêu cầu chữ ký Authenticode hợp lệ của SignPath Foundation, nên sẽ từ chối gói v4.3 chưa ký, kể cả khi nâng cấp từ v4.2. Vui lòng cập nhật thủ công theo hướng dẫn bên dưới.
+
+### Cách cập nhật thủ công lên v4.3
+
+1. Tải `VKey.zip` / `VKey-x64.zip` (Sciter) hoặc `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) từ [Releases chính thức](https://github.com/phatMT97/VKey/releases) và xác minh attestation theo README.
+2. Thoát VKey đang chạy, giải nén gói mới vào thư mục riêng, rồi chạy `VKey.exe` (Sciter) hoặc `VKeyClassic.exe` (Classic). Không trộn file của hai bản vào cùng thư mục.
+
+**English:** Both Sciter and Classic v4.3 are released without Authenticode signatures. SignPath declined signing the standard edition because Sciter is closed-source, and no package is being submitted for this release. Classic-only signing is awaiting renewed approval; Classic is released unsigned alongside Sciter. Windows SmartScreen or antivirus software may warn, block, or quarantine the files. Automatic installation of unsigned updates (including v4.2 → v4.3) fails the updater's SignPath signature check: download the ZIP for your edition from the official release, verify its attestation, exit VKey, extract to a separate folder, and run the new executable. Keep the two editions in separate folders.
 
 Bản cập nhật này mang đến cải tiến đột phá về khả năng tự động sửa lỗi chính tả cùng các sửa lỗi quan trọng giúp nâng cao độ ổn định.
 
@@ -64,7 +71,7 @@ Bản cập nhật này mang đến cải tiến đột phá về khả năng t�
 
 **Sponsors**
 
-Free code signing for the three approved VKeyClassic binaries is provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Thank you, SignPath! 🙏
+Free code signing for past releases v4.0–v4.2 was provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Classic-only signing for v4.3 is awaiting renewed approval.
 
 ---
 
