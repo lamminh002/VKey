@@ -15,6 +15,28 @@
 
 **English:** Both Sciter and Classic v4.3 are released without Authenticode signatures. SignPath declined signing the standard edition because Sciter is closed-source, and no package is being submitted for this release. Classic-only signing is awaiting renewed approval; Classic is released unsigned alongside Sciter. Windows SmartScreen or antivirus software may warn, block, or quarantine the files. Automatic installation of unsigned updates (including v4.2 → v4.3) fails the updater's SignPath signature check: download the ZIP for your edition from the official release, verify its attestation, exit VKey, extract to a separate folder, and run the new executable. Keep the two editions in separate folders.
 
+### Kết quả VirusTotal (v4.3.0)
+
+Các ZIP và DLL được tải từ chính release này và xác minh SHA-256 trước khi gửi quét; EXE được giải nén từ ZIP tương ứng. Mỗi liên kết trỏ tới báo cáo của đúng hash file; ZIP và EXE bên trong có kết quả riêng. Số liệu có thể thay đổi khi các hãng antivirus cập nhật.
+
+| Tệp / báo cáo VirusTotal | Engine báo độc hại | Đáng ngờ | Quét lúc (UTC) |
+|---|---:|---:|---|
+| [VKey.zip](https://www.virustotal.com/gui/file/40b4781a32d3cc7a97bfed822a4b6c47311b04e2bec255afcdfa6dfd2a851424/detection) | 0 | 0 | 2026-10-21 10:25:04 |
+| [VKey.exe](https://www.virustotal.com/gui/file/15a186784cee47950db921f4abef28a2365ce95ca7bb6d44c577f257ea2a9b41/detection) | 2 | 0 | 2026-10-21 10:25:36 |
+| [VKeyClassic.zip](https://www.virustotal.com/gui/file/0cdc6116bb7e8f7f616bc60049578abdece742074a1fd6984a87201b52861ceb/detection) | 1 | 0 | 2026-10-21 10:25:20 |
+| [VKeyClassic.exe](https://www.virustotal.com/gui/file/4eb8b66601e0e811cbea883a75ae4f3f2c2abee198caaca768f0a0dccf096990/detection) | 3 | 0 | 2026-10-21 10:25:52 |
+| [vkey_engine.dll](https://www.virustotal.com/gui/file/d63cbe59e2f4998d802a7e1a5f2cc5ba0a51a1048491a3511016b9bbb5cb6397/detection) | 0 | 0 | 2026-10-21 10:26:08 |
+
+Tên phát hiện được các engine trả về:
+
+- `VKey.exe`: Microsoft (`Trojan:Win32/Wacatac.C!ml`), APEX (`Malicious`).
+- `VKeyClassic.zip`: Bkav (`W32.Malware.AD871EEE`).
+- `VKeyClassic.exe`: Bkav (`W32.Malware.AD871EEE`), Microsoft (`Trojan:Win32/Wacatac.C!ml`), APEX (`Malicious`).
+
+`VKey.zip` có 1 engine lỗi; `vkey_engine.dll` có 3 engine timeout. Các báo cáo cũng liệt kê những engine không hỗ trợ định dạng file. Số cảnh báo của ZIP không thay thế kết quả quét EXE bên trong.
+
+**English:** The table links to VirusTotal reports for the exact released file hashes, with UTC scan times and malicious/suspicious engine counts. Some engines flag the executables and Classic ZIP as listed above. Archive and executable results differ; check the individual reports. The Sciter ZIP has one engine error and the engine DLL has three timeouts.
+
 Bản cập nhật này mang đến cải tiến đột phá về khả năng tự động sửa lỗi chính tả cùng các sửa lỗi quan trọng giúp nâng cao độ ổn định.
 
 ### ✨ Tính năng mới & Cải tiến nổi bật
