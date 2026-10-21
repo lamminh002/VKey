@@ -1,13 +1,13 @@
-# VKey v4.3.0
+# VKey v4.3.1
 
-**Bản dựng lại ngày 21/10/2026:** thay thế các gói v4.3.0 đã phát hành trước đó cùng ngày. Nếu đã tải v4.3.0, hãy tải lại ZIP và cài thủ công; ứng dụng không thể nhận biết bản dựng mới khi số phiên bản vẫn là 4.3.0.
+**Bản sửa lỗi ngày 21/10/2026**, thay thế v4.3.0 đã được rút lại. Nếu đã tải v4.3.0, hãy tải ZIP v4.3.1 và cài thủ công theo hướng dẫn bên dưới.
 
-### Sửa lỗi trong bản dựng lại
+### Sửa lỗi v4.3.1
 
 - Sửa thông báo “cập nhật thành công” sau khi cài đặt thất bại và quay về bản cũ. Kết quả cài đặt được đọc riêng, không suy ra từ việc dọn file cũ.
 - Sửa watchdog tự mở lại VKey sau khi chọn **Thoát**, kể cả khi thoát ngay sau khởi động.
 - Sửa tải engine Nâng cao: kiểm tra file chữ ký 72 byte riêng với DLL và đóng file chữ ký trước khi xác minh. Việc kiểm tra chữ ký engine vẫn bắt buộc.
-- Hộp thoại cập nhật của cả Sciter và Classic mở trang tải và hướng dẫn cập nhật thủ công trong thời gian bản phát hành chưa ký số.
+- Vẫn thông báo phiên bản mới; trong thời gian chưa ký số, nút cập nhật của Sciter và Classic mở trang tải ZIP để cài thủ công.
 
 > [!WARNING]
 > **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode — cần tải và cập nhật thủ công**
@@ -25,7 +25,7 @@
 
 **English:** Both Sciter and Classic v4.3 are released without Authenticode signatures. SignPath declined signing the standard edition because Sciter is closed-source, and no package is being submitted for this release. Classic-only signing is awaiting renewed approval; Classic is released unsigned alongside Sciter. Windows SmartScreen or antivirus software may warn, block, or quarantine the files. Automatic installation of unsigned updates (including v4.2 → v4.3) fails the updater's SignPath signature check: download the ZIP for your edition from the official release, verify its attestation, exit VKey, extract to a separate folder, and run the new executable. Keep the two editions in separate folders.
 
-### Kết quả VirusTotal (v4.3.0)
+### Kết quả VirusTotal (v4.3.1)
 
 Các gói đã được dựng lại; báo cáo của EXE/ZIP từ bản dựng trước không đại diện cho các file mới. Kết quả quét theo đúng SHA-256 sẽ được cập nhật sau khi bản dựng mới hoàn tất.
 
