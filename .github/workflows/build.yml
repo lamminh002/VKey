@@ -722,6 +722,7 @@ jobs:
         with:
           artifact-ids: ${{ needs.package.outputs.release-assets-artifact-id }}
           path: ${{ runner.temp }}/release-assets
+          merge-multiple: true
 
       - name: Verify immutable release assets and archive contents
         shell: powershell
