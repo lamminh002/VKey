@@ -841,7 +841,8 @@ jobs:
             ${{ runner.temp }}/release-assets/vkey_engine.dll.sig
 
       - name: Publish without overwriting release assets
-        shell: powershell
+        # PowerShell 5.1 treats gh's expected "not found" stderr as a fatal error.
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
