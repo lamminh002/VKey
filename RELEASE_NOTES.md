@@ -1,99 +1,35 @@
 # VKey v4.3.1
 
-**Bản sửa lỗi ngày 21/10/2026**, thay thế v4.3.0 đã được rút lại. Nếu đã tải v4.3.0, hãy tải ZIP v4.3.1 và cài thủ công theo hướng dẫn bên dưới.
+Bản cập nhật sửa lỗi cho cả Sciter và Classic, thay thế v4.3.0 đã thu hồi.
 
-### Sửa lỗi v4.3.1
+### Sửa lỗi
 
-- Sửa thông báo “cập nhật thành công” sau khi cài đặt thất bại và quay về bản cũ. Kết quả cài đặt được đọc riêng, không suy ra từ việc dọn file cũ.
-- Sửa watchdog tự mở lại VKey sau khi chọn **Thoát**, kể cả khi thoát ngay sau khởi động.
-- Sửa tải engine Nâng cao: kiểm tra file chữ ký 72 byte riêng với DLL và đóng file chữ ký trước khi xác minh. Việc kiểm tra chữ ký engine vẫn bắt buộc.
-- Vẫn thông báo phiên bản mới; trong thời gian chưa ký số, nút cập nhật của Sciter và Classic mở trang tải ZIP để cài thủ công.
+- Sửa lỗi báo cập nhật thành công dù cài đặt thất bại.
+- Sửa lỗi VKey tự mở lại ngay sau khi chọn **Thoát**.
+- Sửa lỗi không xác minh được engine tải về khi bật **Kiểm tra chính tả nâng cao**.
+- Bổ sung chữ ký gói cập nhật để Sciter và Classic tiếp tục cập nhật tự động.
 
-> [!WARNING]
-> **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode — cần tải và cập nhật thủ công**
->
-> 1. **Lý do chưa ký:** SignPath không chấp thuận ký bản tiêu chuẩn vì giao diện Sciter là thành phần mã nguồn đóng (closed-source). Đợt phát hành này không gửi package tới SignPath.
-> 2. **Classic phát hành chưa ký trong lúc chờ phê duyệt lại:** Phương án chỉ ký ba binary GPL-3.0 của Classic (`VKeyClassic.exe`, `VKeyTSF.dll`, `VKeyWatchdog.exe`), build riêng với Rust tắt hoàn toàn và không có Sciter, đang được xét duyệt lại. Đợt này phát hành **cả Sciter lẫn Classic chưa ký**, không chờ phê duyệt ký số để phát hành Classic.
-> 3. **Windows/antivirus có thể chặn:** Do thiếu chữ ký Authenticode, Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo, chặn chạy, cách ly hoặc xóa file. Hãy [xác minh nguồn gốc bản tải](https://github.com/phatMT97/VKey#xác-minh-bản-tải-verify-release) trước khi xử lý cảnh báo; xem [hướng dẫn antivirus](docs/ANTIVIRUS.md). Sigstore attestation không thay thế Authenticode và không gỡ cảnh báo SmartScreen.
-> 4. **Cập nhật tự động không cài được bản chưa ký:** Trình cập nhật vẫn yêu cầu chữ ký Authenticode hợp lệ của SignPath Foundation, nên sẽ từ chối gói v4.3 chưa ký, kể cả khi nâng cấp từ v4.2. Vui lòng cập nhật thủ công theo hướng dẫn bên dưới.
+### Lưu ý khi nâng cấp
 
-### Cách cập nhật thủ công lên v4.3
+**Từ v4.2 hoặc v4.3.0: cần cài đặt thủ công một lần.** Trình cập nhật cũ yêu cầu chữ ký SignPath nên không thể tự cài bản này. Xem [hướng dẫn nâng cấp](https://github.com/phatMT97/VKey#ký-số-và-cập-nhật-thủ-công).
 
-1. Tải `VKey.zip` / `VKey-x64.zip` (Sciter) hoặc `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) từ [Releases chính thức](https://github.com/phatMT97/VKey/releases) và xác minh attestation theo README.
-2. Tắt tùy chọn **Watchdog / Tự khởi động lại khi crash** trong bản cũ trước khi thoát. Nếu bản cũ đang tự mở lại liên tục, kết thúc cả `VKeyWatchdog.exe` và `VKey.exe` trong Task Manager.
-3. Giải nén gói mới vào thư mục riêng, rồi chạy `VKey.exe` (Sciter) hoặc `VKeyClassic.exe` (Classic). Không trộn file của hai bản vào cùng thư mục.
+Sau khi cài v4.3.1, các lần cập nhật tiếp theo sẽ được xác minh bằng chữ ký gói của dự án và cài đặt tự động.
 
-**English:** Both Sciter and Classic v4.3 are released without Authenticode signatures. SignPath declined signing the standard edition because Sciter is closed-source, and no package is being submitted for this release. Classic-only signing is awaiting renewed approval; Classic is released unsigned alongside Sciter. Windows SmartScreen or antivirus software may warn, block, or quarantine the files. Automatic installation of unsigned updates (including v4.2 → v4.3) fails the updater's SignPath signature check: download the ZIP for your edition from the official release, verify its attestation, exit VKey, extract to a separate folder, and run the new executable. Keep the two editions in separate folders.
+### Chữ ký số
 
-### Kết quả VirusTotal (v4.3.1)
+**Cả Sciter và Classic đều chưa được ký Authenticode.** SignPath không chấp thuận ký bản Sciter vì Sciter là thành phần mã nguồn đóng. Phương án ký riêng Classic đang chờ phê duyệt lại.
 
-Các gói đã được dựng lại; báo cáo của EXE/ZIP từ bản dựng trước không đại diện cho các file mới. Kết quả quét theo đúng SHA-256 sẽ được cập nhật sau khi bản dựng mới hoàn tất.
+Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo hoặc chặn ứng dụng. Chữ ký gói cập nhật không thay thế Authenticode.
 
-#### Vì sao có thể bị antivirus nhận nhầm?
+### VirusTotal
 
-- **VKey cần xử lý bàn phím để gõ tiếng Việt:** hook bàn phím, gửi phím tổng hợp (`SendInput`) và tích hợp TSF là các cơ chế của bộ gõ. Tùy chọn khởi động cùng Windows và watchdog cũng có thể làm tăng tín hiệu heuristic. Một số cơ chế tương tự xuất hiện trong phần mềm độc hại, nên bộ quét heuristic/ML có thể phân loại nhầm phần mềm hợp lệ. Đây là một khả năng giải thích cảnh báo, chưa phải nguyên nhân đã được các hãng xác nhận riêng cho những hash trên.
-- **v4.3 chưa có chữ ký Authenticode:** cả Sciter và Classic thiếu thông tin publisher đã được xác thực và reputation từ chứng chỉ ký số. Điều này góp phần làm bản tải mới khó được tin cậy hơn. Cảnh báo SmartScreen về độ phổ biến/publisher và verdict antivirus là hai cơ chế khác nhau; thiếu chữ ký không tự chứng minh file có virus, và có chữ ký cũng không bảo đảm antivirus sẽ không cảnh báo.
-- **Chưa có kết luận gỡ cảnh báo từ hãng antivirus:** các nhãn heuristic/ML là kết quả phân loại của từng engine. Chỉ nhãn đó hoặc việc ít engine cảnh báo chưa đủ để khẳng định chắc chắn đây là false positive. Dự án giữ nguyên kết quả và liên kết theo SHA-256 để đối chiếu minh bạch.
+Kết quả quét cho Sciter, Classic và DLL engine sẽ được bổ sung trước khi phát hành.
 
-Microsoft giải thích rằng [bộ phân loại ML/heuristic có thể tạo false positive và chữ ký số giúp tăng độ tin cậy](https://www.microsoft.com/en-us/security/blog/2018/08/16/partnering-with-the-industry-to-minimize-false-positives/). Nếu cần yêu cầu Microsoft xem xét lại một file, hãy [gửi mẫu để phân tích](https://www.microsoft.com/wdsi/filesubmission); chưa có kết quả xử lý từ hãng được công bố ở đây. Trước khi xử lý cảnh báo, đối chiếu nguồn tải và build attestation theo README; xem thêm [hướng dẫn antivirus](docs/ANTIVIRUS.md).
-
-Bản cập nhật này mang đến cải tiến đột phá về khả năng tự động sửa lỗi chính tả cùng các sửa lỗi quan trọng giúp nâng cao độ ổn định.
-
-### ✨ Tính năng mới & Cải tiến nổi bật
-
-* **🧪 VKey Browser — tự chuyển chế độ theo website (thử nghiệm)**
-    * Thêm extension đồng hành [VKey-Browser](https://github.com/phatMT97/VKey-Browser) và `VKeyBrowserHost.exe` để áp dụng **Theo VKey**, **English** hoặc **TSF tương thích** theo từng tên miền.
-    * Chuyển tab hoặc chuyển cửa sổ sẽ tự cập nhật chế độ. Ví dụ có thể dùng V trên `google.com` và tự chuyển E trên `facebook.com` mà không làm thay đổi trạng thái V/E gốc.
-    * Có công tắc bật/tắt toàn cục: tắt sẽ tạm dừng mọi rule nhưng vẫn giữ nguyên cấu hình để bật lại sau.
-    * Popup hiển thị trạng thái kết nối native host và dùng icon VKey; gói Chromium/Firefox có manifest riêng để tương thích Manifest V3.
-    * Chế độ TSF theo tên miền hỗ trợ các editor/forum Firefox bị dính chữ sau emoji/inline image; composition được đặt kiểu hiển thị không gạch chân.
-    * Extension chỉ gửi hostname, browser, trạng thái focus và route cục bộ; không gửi URL đầy đủ, nội dung trang hoặc phím gõ.
-    * Hiện cài bằng Developer mode/Load unpacked và chưa phát hành trên Chrome Web Store hoặc Firefox AMO. Extension không thể đọc nội dung đang gõ trong address bar trước khi navigation.
-    * Hướng dẫn cài đặt: [docs/BROWSER_EXTENSION.md](docs/BROWSER_EXTENSION.md).
-* **🌐 Ra mắt trang thông tin chính thức**: Chính thức ra mắt website tại [www.vkey.qd.je](https://www.vkey.qd.je/) giúp người dùng dễ dàng tra cứu thông tin tính năng, hướng dẫn sử dụng và tải về các bản phát hành.
-* **Tinh chỉnh UI**  (chỉ ở giao diện hiện đại)
-    * **Tab "Hệ thống"**: Gom nhóm tuỳ chọn icon để giúp UI gọn hơn
-    * **Tab "Macro"**: Tách riêng các nút hành động (Lưu, Test, Xóa, Nhập) và cải thiện bố cục danh sách macro để dễ sử dụng hơn.
-    * **Xóa nhiều gõ tắt cùng lúc**: Thêm ô chọn ở bảng Macro để chọn và xóa nhiều từ gõ tắt trong một lần.
-    * **Quản lý "Từ điển & Loại trừ chính tả"**: Bổ sung hộp thoại đồ họa trực quan để quản lý Từ điển cá nhân (`user_dictionary.txt`) và Ngoại lệ viết tắt; hỗ trợ thêm, sửa, xóa, nạp/xuất file `.txt` và lưu áp dụng tức thì. Tab được thiết kế chia đều 50/50, phân tách rõ hàng thao tác tệp và hàng nút hành động.
-* **Chế độ "Kiểm tra chính tả nâng cao"**
-    * **Engine Rust hiệu năng cao**: Bổ sung engine kiểm tra chính tả mới được viết bằng Rust, tập trung vào hiệu năng và khả năng nhận diện lỗi.
-    * **Tự sửa lỗi gõ nhanh**: Phát hiện và sửa các lỗi gõ nhanh, đảo ký tự hoặc nhầm ký tự (ví dụ: `hcaof` → `chào`, `xywr` → `xử`).
-    * **Gõ từ tiếng Anh & thương hiệu mượt mà**: Có thể viết các từ như `asus` mà không cần gõ 3 chữ `s` (`assus`) hay thao tác phục hồi phức tạp — chỉ cần gõ đúng thứ tự `a-s-u-s` là engine tự nhận diện và xuất đúng từ.
-    * **Hoạt động theo lựa chọn của người dùng**: Tính năng mặc định được tắt và chỉ được kích hoạt khi bạn chủ động bật trong cài đặt.
-    * **Tương thích với engine mã nguồn mở**: Nếu engine nâng cao không có hoặc bị gỡ bỏ, VKey sẽ tự động sử dụng engine C++ mã nguồn mở đi kèm mà không ảnh hưởng đến các chức năng gõ tiếng Việt thông thường.
-    * 🎬 **[Xem demo tính năng tự sửa lỗi gõ](https://www.vkey.qd.je/#demo)**
-
-> ℹ️ **Tìm hiểu thêm**
->
-> Để biết thêm chi tiết về kiến trúc engine nâng cao, cơ chế phân phối, lý do thiết kế cũng như các vấn đề về mã nguồn & giấy phép (license), vui lòng tham khảo:
->
-> - [Kiến trúc kỹ thuật Engine nâng cao](docs/ENGINE_ARCHITECTURE.md)
-> - [Giải đáp FAQ về kiến trúc, giấy phép & nguồn gốc VKey](docs/ENGINE_FAQ.md)
-
-* **🎮 Chế độ game (thay đổi hành vi mặc định — game thủ vui lòng đọc)**
-    * **Trước đây**: cơ chế giữ phím cho game được bật ngầm cho **mọi** ứng dụng Win32 thông thường (Notepad, Word, Windows Terminal…). Mỗi lần bỏ dấu, VKey nhả ký tự gốc ra màn hình rồi mới xoá đi. Việc này gây nháy chữ và tình trạng đôi lúc không đặt được dấu đúng mong đợi.
-    * **Từ bản này**: mặc định mọi ứng dụng dùng cách gõ thông thường (xoá rồi thay). Cơ chế giữ phím cho game trở thành **tuỳ chọn**, bật riêng cho từng ứng dụng.
-    * **Cách bật**: chọn `Chế độ game` trong mục "Cách gửi" ở **Cấu hình từng ứng dụng**, hoặc gán một phím tắt cho `Bật / tắt chế độ game cho app đang mở` trong **Quản lý phím tắt** rồi nhấn ngay khi đang ở trong game — ứng dụng đó sẽ được thêm vào danh sách, nhấn lần nữa để gỡ.
-    * Phím tắt này **không có tổ hợp mặc định**: bất cứ tổ hợp nào chọn sẵn cũng sẽ đụng phím đã gán trong game, nên bạn tự chọn.
-    * Ứng dụng nào đã cấu hình sẵn "Cách gửi" khác (Clipboard, Firefox, Cloud/Remote…) không bị ảnh hưởng.
----
-
-### 🛠 Các lỗi đã được khắc phục
-*   **Sửa lỗi bỏ dấu từ ghép**: Khắc phục lỗi gõ từ `ruouwj` không bỏ dấu đúng cách để tạo thành từ `rượu`.
-*   **Sửa lỗi gõ từ tiếng Anh**: Khắc phục hiện tượng gõ từ `view` bị chuyển nhầm thành `vieư`.
-*   **Sửa lỗi nạp từ điển cá nhân (User Dictionary)**: Khắc phục lỗi engine chính tả Rust từ chối file `user_dictionary.txt` do xung đột cú pháp ghi chú header (`;` thay vì `#`), khiến các từ bảo vệ đã lưu (như `soà`, `khưm`...) vẫn bị tự sửa thành từ khác khi bật Kiểm tra chính tả nâng cao.
-*   **Tối ưu hóa trạng thái hoạt động**: Sửa lỗi ứng dụng chuyển sang trạng thái chờ (idle) quá nhanh gây ảnh hưởng đến trải nghiệm người dùng.
-*   **Cải tiến giao diện**: Tối ưu hóa hiệu năng hiển thị và chuyển đổi của các bộ giao diện (theme).
-*   **Sửa lỗi excel online**: Khắc phục lỗi mất từ trước đó khi dùng shift để viết hoa từ tiếng Việt. 
-*   **Sửa lỗi macro TSF**: Macro đã hoạt động với TSF
-*   **Sửa lỗi mất dấu không hồi phục được**: Khắc phục lỗi thỉnh thoảng gõ `khoong` ra thẳng `khoong` thay vì `không`, và sau đó xoá đi gõ lại vẫn không tạo được dấu.
+VKey sử dụng hook bàn phím và gửi phím tổng hợp để xử lý tiếng Việt; các hành vi này có thể bị bộ quét nhận nhầm. Đây là khả năng giải thích cảnh báo, chưa phải kết luận từ các hãng antivirus. Xem [hướng dẫn kiểm tra bản tải](https://github.com/phatMT97/VKey/blob/Main/docs/ANTIVIRUS.md).
 
 ---
 
-**Sponsors**
-
-Free code signing for past releases v4.0–v4.2 was provided by [SignPath.io](https://signpath.io/), certificate by [SignPath Foundation](https://signpath.org/). Classic-only signing for v4.3 is awaiting renewed approval.
+[Xem các thay đổi của VKey v4.3](https://github.com/phatMT97/VKey/blob/Main/docs/releases/v4.3.0.md).
 
 ---
 

@@ -1191,7 +1191,23 @@ void ClassicSettingsDialog::OnActionButton(uint16_t controlId) {
             if (!completed) break;  // User cancelled
 
             if (state->info.available) {
-                UpdateChecker::ShowUpdateDialog(dlgHwnd, state->info);
+                if (UpdateChecker::ShowUpdateDialog(dlgHwnd, state->info)) {
+                    if (UpdateChecker::DownloadWithProgress(dlgHwnd, state->info.downloadUrl, state->info.packedVersion)) {
+                        // Flush dirty config before quitting — PostQuitMessage bypasses
+                        // WM_CLOSE, so the deferred save timer never fires.
+                        if (configDirty_) {
+                            KillTimer(hwnd_, kTimerDeferredSave);
+                            SaveToToml();
+                        }
+                        // Signal main process to exit so the updater can replace files.
+                        // The updater waits for this process before replacing files.
+                        HWND trayWnd = FindWindowW(L"VKeyTrayClass", nullptr);
+                        if (trayWnd) {
+                            PostMessageW(trayWnd, WM_CLOSE, 0, 0);
+                        }
+                        PostQuitMessage(0);
+                    }
+                }
             } else if (state->info.checkSucceeded) {
                 UpdateChecker::ShowUpToDateMessage(dlgHwnd);
             } else {

@@ -175,11 +175,10 @@ Keep the Classic signing and release gates disabled and do not dispatch either
 `review` or `release` in the Foundation workflow for this release.
 
 Both unsigned editions may be warned about, blocked, or quarantined by
-Windows SmartScreen or antivirus software. The updater still requires a valid
-SignPath Foundation Authenticode signature and cannot install unsigned updates,
-including v4.2 → v4.3. Users must download and install manually; the release notes
-and README explain how. Sigstore attestations verify build provenance but do not
-replace Authenticode or remove SmartScreen warnings.
+Windows SmartScreen or antivirus software. Older clients (v4.2/v4.3.0) require
+one manual upgrade to v4.3.1 because they pin SignPath Authenticode. From v4.3.1,
+automatic updates verify project-signed ZIP packages instead. Sigstore attestations
+verify build provenance but do not replace Authenticode or remove SmartScreen warnings.
 
 The workflows separate the unsigned release from the proposed Classic signing
 path so proprietary Sciter/Rust inputs never enter the SignPath Foundation boundary.

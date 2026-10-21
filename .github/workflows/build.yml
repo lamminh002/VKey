@@ -4,7 +4,9 @@ name: Build
 #   1. Repository variable VKEY_STANDARD_RELEASE_ENABLED is exactly "true".
 #   2. Environment vkey-standard-release requires reviewers and allows only
 #      canonical v* tags that point to the exact Main HEAD.
-#   3. VKEY_STANDARD_WINGET_TOKEN is stored only in that environment.
+#   3. VKEY_UPDATE_PRIVATE_KEY is stored only in that environment.
+#   4. Environment vkey-release-publication gates final publication after scans.
+# WinGet submission is optional and needs VKEY_STANDARD_WINGET_TOKEN.
 
 on:
   push:
@@ -678,9 +680,11 @@ jobs:
 
 
   publish-release:
-    name: Attest and publish exact Sciter and Classic release assets
+    name: Sign, attest and stage the release draft
     if: startsWith(github.ref, 'refs/tags/')
     needs: [validate, build-sciter, build-classic, package]
+    outputs:
+      asset-manifest: ${{ steps.stage-release.outputs.asset-manifest }}
     runs-on: windows-2022
     environment:
       name: vkey-standard-release
@@ -815,6 +819,64 @@ jobs:
             }
           }
 
+      - name: Sign and verify update packages with the project key
+        shell: pwsh
+        env:
+          VKEY_UPDATE_PRIVATE_KEY: ${{ secrets.VKEY_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          if ($env:VKEY_UPDATE_PRIVATE_KEY -notmatch '^[0-9a-f]{64}$') {
+            throw "Protected environment VKEY_UPDATE_PRIVATE_KEY is missing or malformed"
+          }
+          $root = Join-Path $env:RUNNER_TEMP "release-assets"
+          $header = Get-Content "src/core/security/UpdateSigningKey.h" -Raw
+          $publicHex = [regex]::Match($header, 'kUpdateSigningPublicKey\[\] = "([0-9a-f]{128})"').Groups[1].Value
+          if ($publicHex.Length -ne 128) { throw "Update public key is missing" }
+          $parameters = [System.Security.Cryptography.ECParameters]::new()
+          $parameters.Curve = [System.Security.Cryptography.ECCurve+NamedCurves]::nistP256
+          $point = [System.Security.Cryptography.ECPoint]::new()
+          $point.X = [Convert]::FromHexString($publicHex.Substring(0, 64))
+          $point.Y = [Convert]::FromHexString($publicHex.Substring(64, 64))
+          $parameters.Q = $point
+          $parameters.D = [Convert]::FromHexString($env:VKEY_UPDATE_PRIVATE_KEY)
+          $signer = [System.Security.Cryptography.ECDsa]::Create()
+          try {
+            $signer.ImportParameters($parameters)
+            $version = [version]$env:GITHUB_REF_NAME.TrimStart('v')
+            [uint32]$packedVersion = ($version.Major -shl 16) -bor ($version.Minor -shl 8) -bor $version.Build
+            $releaseJson = & gh release view $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --json assets 2>$null
+            $existing = @()
+            if ($LASTEXITCODE -eq 0) { $existing = @(($releaseJson | ConvertFrom-Json).assets.name) }
+            $global:LASTEXITCODE = 0
+            $packages = [ordered]@{ "VKey.zip" = 1; "VKey-x64.zip" = 1; "VKeyClassic.zip" = 2; "VKeyClassic-x64.zip" = 2 }
+            foreach ($package in $packages.GetEnumerator()) {
+              $name = $package.Key
+              $digest = [Convert]::FromHexString((Get-FileHash (Join-Path $root $name) -Algorithm SHA256).Hash)
+              [byte[]]$prefix = [BitConverter]::GetBytes($packedVersion) + [BitConverter]::GetBytes([uint32]$package.Value)
+              [byte[]]$payload = [Text.Encoding]::ASCII.GetBytes("VKEYUPD1") + $digest + $prefix
+              $signaturePath = Join-Path $root "$name.sig"
+              if ($existing -contains "$name.sig") {
+                & gh release download $env:GITHUB_REF_NAME --repo $env:GITHUB_REPOSITORY --pattern "$name.sig" --dir $root
+                if ($LASTEXITCODE -ne 0) { throw "Cannot retrieve existing package signature" }
+                $receipt = [IO.File]::ReadAllBytes($signaturePath)
+                if ($receipt.Length -ne 72 -or [BitConverter]::ToString($receipt[0..7]) -ne [BitConverter]::ToString($prefix)) {
+                  throw "Existing package signature metadata differs"
+                }
+                [byte[]]$signature = $receipt[8..71]
+              } else {
+                $signature = $signer.SignData($payload, [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                  [System.Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)
+                [IO.File]::WriteAllBytes($signaturePath, [byte[]]($prefix + $signature))
+              }
+              if (-not $signer.VerifyData($payload, $signature, [System.Security.Cryptography.HashAlgorithmName]::SHA256,
+                  [System.Security.Cryptography.DSASignatureFormat]::IeeeP1363FixedFieldConcatenation)) {
+                throw "Package signature verification failed: $name"
+              }
+              Write-Host "Verified signed update package: $name"
+            }
+          } finally { $signer.Dispose() }
+
       - name: Attest VKey archives
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
@@ -823,6 +885,10 @@ jobs:
             ${{ runner.temp }}/release-assets/VKey-x64.zip
             ${{ runner.temp }}/release-assets/VKeyClassic.zip
             ${{ runner.temp }}/release-assets/VKeyClassic-x64.zip
+            ${{ runner.temp }}/release-assets/VKey.zip.sig
+            ${{ runner.temp }}/release-assets/VKey-x64.zip.sig
+            ${{ runner.temp }}/release-assets/VKeyClassic.zip.sig
+            ${{ runner.temp }}/release-assets/VKeyClassic-x64.zip.sig
 
       - name: Attest edition-specific companions
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -840,7 +906,8 @@ jobs:
             ${{ runner.temp }}/release-assets/vkey_engine.dll
             ${{ runner.temp }}/release-assets/vkey_engine.dll.sig
 
-      - name: Publish without overwriting release assets
+      - name: Stage draft without overwriting release assets
+        id: stage-release
         # PowerShell 5.1 treats gh's expected "not found" stderr as a fatal error.
         shell: pwsh
         env:
@@ -886,6 +953,10 @@ jobs:
           # Preflight every same-name asset before changing the Release. Reruns
           # are idempotent only when existing bytes are identical.
           $assets = @(
+            "VKey.zip.sig",
+            "VKey-x64.zip.sig",
+            "VKeyClassic.zip.sig",
+            "VKeyClassic-x64.zip.sig",
             "VKey.zip.sha256",
             "VKey-x64.zip.sha256",
             "VKeyBrowserHost.exe.sha256",
@@ -944,19 +1015,67 @@ jobs:
             }
           }
 
-          if ($releaseWasDraft) {
-            & gh release edit $env:RELEASE_TAG `
-              --repo $env:GITHUB_REPOSITORY `
-              --draft=false
-            if ($LASTEXITCODE -ne 0) {
-              throw "Assets are complete but the release could not be published"
+          $manifest = [ordered]@{}
+          foreach ($asset in $assets) {
+            $manifest[$asset] = (Get-FileHash (Join-Path $root $asset) -Algorithm SHA256).Hash.ToLower()
+          }
+          "asset-manifest=$($manifest | ConvertTo-Json -Compress)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Draft ready for scanning and final publication review."
+
+  finalize-release:
+    name: Publish the reviewed draft release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [validate, publish-release]
+    runs-on: windows-2022
+    environment:
+      name: vkey-release-publication
+      url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the validated source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.validate.outputs.source-sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+          submodules: false
+
+      - name: Verify the staged assets and publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          EXPECTED_SHA: ${{ needs.validate.outputs.source-sha }}
+          EXPECTED_ASSETS: ${{ needs.publish-release.outputs.asset-manifest }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tagSha = & git rev-list -n 1 "refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0 -or $tagSha.Trim() -ne $env:EXPECTED_SHA) { throw "Release tag changed after staging" }
+          $expected = $env:EXPECTED_ASSETS | ConvertFrom-Json -AsHashtable
+          if ($expected.Count -ne 25) { throw "Staged release manifest is incomplete" }
+          $root = Join-Path $env:RUNNER_TEMP "publication-check"
+          & gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --dir $root
+          if ($LASTEXITCODE -ne 0) { throw "Cannot download the staged release" }
+          $actual = @(Get-ChildItem $root -File)
+          if ($actual.Count -ne $expected.Count -or @(Get-ChildItem $root -Directory -Recurse).Count -ne 0) {
+            throw "Draft asset set changed after staging"
+          }
+          foreach ($file in $actual) {
+            if (-not $expected.ContainsKey($file.Name) -or
+                (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower() -ne $expected[$file.Name]) {
+              throw "Draft asset changed after staging: $($file.Name)"
             }
           }
+          & gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw "Unable to publish the reviewed draft" }
+
 
   submit-sciter-winget:
     name: Submit standard release to WinGet
     if: startsWith(github.ref, 'refs/tags/')
-    needs: publish-release
+    needs: finalize-release
     runs-on: windows-2022
     environment:
       name: vkey-standard-release
@@ -984,7 +1103,7 @@ jobs:
   submit-classic-winget:
     name: Submit unsigned Classic release to WinGet
     if: startsWith(github.ref, 'refs/tags/')
-    needs: publish-release
+    needs: finalize-release
     runs-on: windows-2022
     environment:
       name: vkey-standard-release

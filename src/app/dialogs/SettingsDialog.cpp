@@ -1688,12 +1688,28 @@ void SettingsDialog::startUpdateCheck() {
     if (!completed) return;  // User cancelled
 
     if (state->info.available) {
-        UpdateChecker::ShowUpdateDialog(hwnd, state->info);
+        if (UpdateChecker::ShowUpdateDialog(hwnd, state->info)) {
+            startUpdate(state->info);
+        }
     } else if (state->info.checkSucceeded) {
         UpdateChecker::ShowUpToDateMessage(hwnd);
     } else {
         UpdateChecker::ShowCheckFailedMessage(hwnd);
     }
+}
+
+void SettingsDialog::startUpdate(const UpdateInfo& info) {
+    HWND hwnd = get_hwnd();
+    if (!hwnd || info.downloadUrl.empty()) return;
+
+    if (!UpdateChecker::DownloadWithProgress(hwnd, info.downloadUrl, info.packedVersion)) return;
+
+    // Success — signal main process to exit
+    HWND trayWnd = FindWindowW(L"VKeyTrayClass", nullptr);
+    if (trayWnd) {
+        PostMessageW(trayWnd, WM_CLOSE, 0, 0);
+    }
+    PostMessageW(hwnd, WM_CLOSE, 0, 0);
 }
 
 }  // namespace NextKey

@@ -246,7 +246,7 @@ bool UpdateChecker::DownloadFile(const std::wstring& url, const std::wstring& lo
     return SUCCEEDED(hr);
 }
 
-void UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
+bool UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
     // Format the content string with version
     wchar_t content[1024];
     swprintf_s(content, S(StringId::UPDATE_AVAILABLE_BODY), info.version.c_str());
@@ -297,16 +297,8 @@ void UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
 
     int button = 0;
     HRESULT hr = TaskDialogIndirect(&tdc, &button, nullptr, nullptr);
-    if (FAILED(hr) || button != 1001) return;
-
-    // Keep VKey running while the user reviews/downloads the unsigned release.
-    // Do not weaken the existing Authenticode installer verification.
-    constexpr auto releasePage = L"https://github.com/phatMT97/VKey/releases/latest";
-    if (reinterpret_cast<INT_PTR>(ShellExecuteW(parent, L"open", releasePage,
-                                               nullptr, nullptr, SW_SHOW)) <= 32) {
-        ShowTopmostTaskDialog(parent, L"VKey", S(StringId::UPDATE_TITLE),
-                             releasePage, TDCBF_OK_BUTTON, TD_WARNING_ICON);
-    }
+    if (FAILED(hr)) return false;
+    return button == 1001;
 }
 
 void UpdateChecker::ShowUpToDateMessage(HWND parent) {
@@ -354,7 +346,7 @@ bool UpdateChecker::ShowProgressDialog(HWND parent, const wchar_t* message,
     return doneFlag.load(std::memory_order_acquire);
 }
 
-bool UpdateChecker::DownloadWithProgress(HWND parent, const std::wstring& downloadUrl) {
+bool UpdateChecker::DownloadWithProgress(HWND parent, const std::wstring& downloadUrl, std::uint32_t expectedVersion) {
     struct State {
         std::atomic<bool> done{false};
         std::atomic<bool> cancel{false};
@@ -362,10 +354,10 @@ bool UpdateChecker::DownloadWithProgress(HWND parent, const std::wstring& downlo
     };
     auto state = std::make_shared<State>();
 
-    std::thread([state, downloadUrl]() {
+    std::thread([state, downloadUrl, expectedVersion]() {
         try {
             CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-            state->success = DownloadAndLaunchInstaller(downloadUrl, state->cancel);
+            state->success = DownloadAndLaunchInstaller(downloadUrl, state->cancel, expectedVersion);
             CoUninitialize();
         } catch (const std::exception& e) {
             CrashLog(L"UpdateChecker::DownloadWithProgress::thread", e.what());
@@ -421,13 +413,26 @@ bool UpdateChecker::DownloadWithProgress(HWND parent, const std::wstring& downlo
     return true;
 }
 
-bool UpdateChecker::DownloadAndLaunchInstaller(const std::wstring& downloadUrl, std::atomic<bool>& cancelFlag) noexcept {
+bool UpdateChecker::DownloadAndLaunchInstaller(const std::wstring& downloadUrl, std::atomic<bool>& cancelFlag, std::uint32_t expectedVersion) noexcept {
     try {
         if (cancelFlag.load(std::memory_order_relaxed)) return false;
 
         wchar_t tempDir[MAX_PATH] = {};
         GetTempPathW(MAX_PATH, tempDir);
-        std::wstring zipPath = std::wstring(tempDir) + L"VKey_update.zip";
+        wchar_t placeholder[MAX_PATH] = {};
+        if (!GetTempFileNameW(tempDir, L"VKU", 0, placeholder)) return false;
+        std::wstring zipPath = std::wstring(placeholder) + L".zip";
+        DeleteFileW(placeholder);
+        struct StagedPackage {
+            std::wstring path;
+            bool handedOff = false;
+            ~StagedPackage() {
+                if (!handedOff) {
+                    DeleteFileW(path.c_str());
+                    DeleteFileW((path + L".sig").c_str());
+                }
+            }
+        } staged{zipPath};
 
         if (!DownloadFile(downloadUrl, zipPath, cancelFlag)) return false;
 
@@ -446,6 +451,10 @@ bool UpdateChecker::DownloadAndLaunchInstaller(const std::wstring& downloadUrl, 
             DeleteFileW(zipPath.c_str());
             return false;
         }
+
+        if (!DownloadFile(downloadUrl + L".sig", zipPath + L".sig", cancelFlag) ||
+            cancelFlag.load(std::memory_order_acquire) ||
+            !VerifySignedUpdateZip(zipPath, expectedVersion)) return false;
 
         // Launch updater: self --install-update <zip>
         wchar_t exePath[MAX_PATH] = {};
@@ -474,6 +483,7 @@ bool UpdateChecker::DownloadAndLaunchInstaller(const std::wstring& downloadUrl, 
         }
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
+        staged.handedOff = true;
         return true;
     } catch (...) {
         return false;

@@ -36,8 +36,8 @@ static const wchar_t* const kVietnamese[] = {
     L"SPDX-License-Identifier: GPL-3.0-only",
     L"Cập nhật",                                     // UPDATE_TITLE
     L"Có phiên bản mới!",                            // UPDATE_AVAILABLE_TITLE
-    L"Phiên bản mới %s đã sẵn sàng.\n\nBản phát hành hiện chưa ký số, cần cập nhật thủ công. Tải ZIP đúng phiên bản, thoát VKey rồi giải nén vào thư mục riêng. Ứng dụng sẽ mở trang tải và tiếp tục chạy.", // UPDATE_AVAILABLE_BODY
-    L"Mở trang tải — cập nhật thủ công",                // UPDATE_NOW
+    L"Phiên bản mới %s đã sẵn sàng.\n\nVKey sẽ tải và xác minh gói cập nhật, sau đó đóng ứng dụng, cài đặt và khởi động lại.", // UPDATE_AVAILABLE_BODY
+    L"Cập nhật ngay",                // UPDATE_NOW
     L"Bỏ qua",                                      // UPDATE_SKIP
     L"Bạn đang dùng phiên bản mới nhất!",           // UPDATE_LATEST
     L"Không thể kiểm tra cập nhật.",                 // UPDATE_FAILED
@@ -129,8 +129,8 @@ static const wchar_t* const kEnglish[] = {
     L"SPDX-License-Identifier: GPL-3.0-only",
     L"Update",                                       // UPDATE_TITLE
     L"Update available!",                            // UPDATE_AVAILABLE_TITLE
-    L"Version %s is available.\n\nCurrent releases are unsigned and require a manual update. Download the ZIP for your edition, exit VKey, and extract it to a separate folder. VKey will open the download page and keep running.", // UPDATE_AVAILABLE_BODY
-    L"Open download page — manual update",              // UPDATE_NOW
+    L"Version %s is available.\n\nVKey will download and verify the update package, then close, install the update, and restart.", // UPDATE_AVAILABLE_BODY
+    L"Update now",              // UPDATE_NOW
     L"Skip",                                         // UPDATE_SKIP
     L"You're on the latest version!",                // UPDATE_LATEST
     L"Unable to check for updates.",                 // UPDATE_FAILED

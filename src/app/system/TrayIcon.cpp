@@ -584,8 +584,18 @@ bool TrayIcon::ProcessMessage(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
     if (msg == WM_VKEY_UPDATE_AVAILABLE && hwnd == hwndMessage_) {
         auto* info = reinterpret_cast<UpdateInfo*>(lParam);
         if (info) {
-            UpdateChecker::ShowUpdateDialog(hwnd, *info);
-            delete info;
+            if (UpdateChecker::ShowUpdateDialog(hwnd, *info)) {
+                // User clicked "Update now" — download with progress dialog
+                std::wstring downloadUrl = info->downloadUrl;
+                const auto expectedVersion = info->packedVersion;
+                delete info;
+
+                if (UpdateChecker::DownloadWithProgress(hwnd, downloadUrl, expectedVersion)) {
+                    PostMessageW(hwnd, WM_CLOSE, 0, 0);
+                }
+            } else {
+                delete info;
+            }
         }
         return true;
     }

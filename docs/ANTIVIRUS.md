@@ -6,12 +6,12 @@
 > phát hành này không gửi package tới SignPath. Windows SmartScreen hoặc antivirus
 > có thể cảnh báo, chặn chạy hoặc cách ly file. Hãy xác minh bản tải bằng
 > **Sigstore attestation**, xem mục *Kiểm chứng* bên dưới. Cập nhật tự động không
-> cài được gói chưa ký; cần [tải và cập nhật thủ công](../README.md#ký-số-và-cập-nhật-thủ-công).
+> cài được gói chưa ký khi nâng từ v4.2/v4.3.0 cũ; cần [cài thủ công một lần](../README.md#ký-số-và-cập-nhật-thủ-công). Từ v4.3.1, auto-update xác minh chữ ký gói riêng của dự án.
 > Một số phần mềm diệt
 > virus (Kaspersky, Bitdefender, Avast…) đôi khi
 > cảnh báo VKey theo **hành vi** (behavior detection) chứ không phải chữ ký virus —
-> vì bộ gõ nào cũng phải hook bàn phím + gửi phím, trông "giống keylogger". Đây là
-> **cảnh báo nhầm (false positive)**. Dưới đây là cách khôi phục và loại trừ.
+> vì bộ gõ nào cũng phải hook bàn phím + gửi phím, trông "giống keylogger". Đây có thể là
+> **cảnh báo nhầm (false positive)**; cần đối chiếu nguồn tải, hash và kết quả cụ thể trước khi kết luận. Dưới đây là cách khôi phục và loại trừ.
 
 ---
 
