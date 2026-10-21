@@ -948,6 +948,7 @@ set(NEXTKEY_TEST_SOURCES
     tests/CodeTableConverterTest.cpp
     tests/QuickConvertLogicTest.cpp
     tests/UpdateSecurityTest.cpp
+    tests/UpdateOutcomeTest.cpp
     tests/AdvancedEngineDownloadPolicyTest.cpp
     tests/EngineBenchmarkTest.cpp
     tests/MacroPrefixTest.cpp

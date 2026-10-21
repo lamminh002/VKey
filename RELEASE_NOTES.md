@@ -1,4 +1,13 @@
-# VKey v4.3
+# VKey v4.3.0
+
+**Bản dựng lại ngày 21/10/2026:** thay thế các gói v4.3.0 đã phát hành trước đó cùng ngày. Nếu đã tải v4.3.0, hãy tải lại ZIP và cài thủ công; ứng dụng không thể nhận biết bản dựng mới khi số phiên bản vẫn là 4.3.0.
+
+### Sửa lỗi trong bản dựng lại
+
+- Sửa thông báo “cập nhật thành công” sau khi cài đặt thất bại và quay về bản cũ. Kết quả cài đặt được đọc riêng, không suy ra từ việc dọn file cũ.
+- Sửa watchdog tự mở lại VKey sau khi chọn **Thoát**, kể cả khi thoát ngay sau khởi động.
+- Sửa tải engine Nâng cao: kiểm tra file chữ ký 72 byte riêng với DLL và đóng file chữ ký trước khi xác minh. Việc kiểm tra chữ ký engine vẫn bắt buộc.
+- Hộp thoại cập nhật của cả Sciter và Classic mở trang tải và hướng dẫn cập nhật thủ công trong thời gian bản phát hành chưa ký số.
 
 > [!WARNING]
 > **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode — cần tải và cập nhật thủ công**
@@ -11,39 +20,22 @@
 ### Cách cập nhật thủ công lên v4.3
 
 1. Tải `VKey.zip` / `VKey-x64.zip` (Sciter) hoặc `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) từ [Releases chính thức](https://github.com/phatMT97/VKey/releases) và xác minh attestation theo README.
-2. Thoát VKey đang chạy, giải nén gói mới vào thư mục riêng, rồi chạy `VKey.exe` (Sciter) hoặc `VKeyClassic.exe` (Classic). Không trộn file của hai bản vào cùng thư mục.
+2. Tắt tùy chọn **Watchdog / Tự khởi động lại khi crash** trong bản cũ trước khi thoát. Nếu bản cũ đang tự mở lại liên tục, kết thúc cả `VKeyWatchdog.exe` và `VKey.exe` trong Task Manager.
+3. Giải nén gói mới vào thư mục riêng, rồi chạy `VKey.exe` (Sciter) hoặc `VKeyClassic.exe` (Classic). Không trộn file của hai bản vào cùng thư mục.
 
 **English:** Both Sciter and Classic v4.3 are released without Authenticode signatures. SignPath declined signing the standard edition because Sciter is closed-source, and no package is being submitted for this release. Classic-only signing is awaiting renewed approval; Classic is released unsigned alongside Sciter. Windows SmartScreen or antivirus software may warn, block, or quarantine the files. Automatic installation of unsigned updates (including v4.2 → v4.3) fails the updater's SignPath signature check: download the ZIP for your edition from the official release, verify its attestation, exit VKey, extract to a separate folder, and run the new executable. Keep the two editions in separate folders.
 
 ### Kết quả VirusTotal (v4.3.0)
 
-Các ZIP và DLL được tải từ chính release này và xác minh SHA-256 trước khi gửi quét; EXE được giải nén từ ZIP tương ứng. Mỗi liên kết trỏ tới báo cáo của đúng hash file; ZIP và EXE bên trong có kết quả riêng. Số liệu có thể thay đổi khi các hãng antivirus cập nhật.
-
-| Tệp / báo cáo VirusTotal | Engine báo độc hại | Đáng ngờ | Quét lúc (UTC) |
-|---|---:|---:|---|
-| [VKey.zip](https://www.virustotal.com/gui/file/40b4781a32d3cc7a97bfed822a4b6c47311b04e2bec255afcdfa6dfd2a851424/detection) | 0 | 0 | 2026-10-21 10:25:04 |
-| [VKey.exe](https://www.virustotal.com/gui/file/15a186784cee47950db921f4abef28a2365ce95ca7bb6d44c577f257ea2a9b41/detection) | 2 | 0 | 2026-10-21 10:25:36 |
-| [VKeyClassic.zip](https://www.virustotal.com/gui/file/0cdc6116bb7e8f7f616bc60049578abdece742074a1fd6984a87201b52861ceb/detection) | 1 | 0 | 2026-10-21 10:25:20 |
-| [VKeyClassic.exe](https://www.virustotal.com/gui/file/4eb8b66601e0e811cbea883a75ae4f3f2c2abee198caaca768f0a0dccf096990/detection) | 3 | 0 | 2026-10-21 10:25:52 |
-| [vkey_engine.dll](https://www.virustotal.com/gui/file/d63cbe59e2f4998d802a7e1a5f2cc5ba0a51a1048491a3511016b9bbb5cb6397/detection) | 0 | 0 | 2026-10-21 10:26:08 |
-
-Tên phát hiện được các engine trả về:
-
-- `VKey.exe`: Microsoft (`Trojan:Win32/Wacatac.C!ml`), APEX (`Malicious`).
-- `VKeyClassic.zip`: Bkav (`W32.Malware.AD871EEE`).
-- `VKeyClassic.exe`: Bkav (`W32.Malware.AD871EEE`), Microsoft (`Trojan:Win32/Wacatac.C!ml`), APEX (`Malicious`).
+Các gói đã được dựng lại; báo cáo của EXE/ZIP từ bản dựng trước không đại diện cho các file mới. Kết quả quét theo đúng SHA-256 sẽ được cập nhật sau khi bản dựng mới hoàn tất.
 
 #### Vì sao có thể bị antivirus nhận nhầm?
 
 - **VKey cần xử lý bàn phím để gõ tiếng Việt:** hook bàn phím, gửi phím tổng hợp (`SendInput`) và tích hợp TSF là các cơ chế của bộ gõ. Tùy chọn khởi động cùng Windows và watchdog cũng có thể làm tăng tín hiệu heuristic. Một số cơ chế tương tự xuất hiện trong phần mềm độc hại, nên bộ quét heuristic/ML có thể phân loại nhầm phần mềm hợp lệ. Đây là một khả năng giải thích cảnh báo, chưa phải nguyên nhân đã được các hãng xác nhận riêng cho những hash trên.
 - **v4.3 chưa có chữ ký Authenticode:** cả Sciter và Classic thiếu thông tin publisher đã được xác thực và reputation từ chứng chỉ ký số. Điều này góp phần làm bản tải mới khó được tin cậy hơn. Cảnh báo SmartScreen về độ phổ biến/publisher và verdict antivirus là hai cơ chế khác nhau; thiếu chữ ký không tự chứng minh file có virus, và có chữ ký cũng không bảo đảm antivirus sẽ không cảnh báo.
-- **Chưa có kết luận gỡ cảnh báo từ hãng antivirus:** các tên `Wacatac.C!ml`, `Malicious` và `W32.Malware.AD871EEE` ở trên là nhãn mà từng engine trả về. Chỉ nhãn đó hoặc việc ít engine cảnh báo chưa đủ để khẳng định chắc chắn đây là false positive. Dự án giữ nguyên kết quả và liên kết theo SHA-256 để đối chiếu minh bạch.
+- **Chưa có kết luận gỡ cảnh báo từ hãng antivirus:** các nhãn heuristic/ML là kết quả phân loại của từng engine. Chỉ nhãn đó hoặc việc ít engine cảnh báo chưa đủ để khẳng định chắc chắn đây là false positive. Dự án giữ nguyên kết quả và liên kết theo SHA-256 để đối chiếu minh bạch.
 
 Microsoft giải thích rằng [bộ phân loại ML/heuristic có thể tạo false positive và chữ ký số giúp tăng độ tin cậy](https://www.microsoft.com/en-us/security/blog/2018/08/16/partnering-with-the-industry-to-minimize-false-positives/). Nếu cần yêu cầu Microsoft xem xét lại một file, hãy [gửi mẫu để phân tích](https://www.microsoft.com/wdsi/filesubmission); chưa có kết quả xử lý từ hãng được công bố ở đây. Trước khi xử lý cảnh báo, đối chiếu nguồn tải và build attestation theo README; xem thêm [hướng dẫn antivirus](docs/ANTIVIRUS.md).
-
-`VKey.zip` có 1 engine lỗi; `vkey_engine.dll` có 3 engine timeout. Các báo cáo cũng liệt kê những engine không hỗ trợ định dạng file. Số cảnh báo của ZIP không thay thế kết quả quét EXE bên trong.
-
-**English:** The table links to VirusTotal reports for the exact released file hashes, with UTC scan times and malicious/suspicious engine counts. Some engines flag the executables and Classic ZIP as listed above. Archive and executable results differ; check the individual reports. The Sciter ZIP has one engine error and the engine DLL has three timeouts.
 
 Bản cập nhật này mang đến cải tiến đột phá về khả năng tự động sửa lỗi chính tả cùng các sửa lỗi quan trọng giúp nâng cao độ ổn định.
 

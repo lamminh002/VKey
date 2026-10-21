@@ -261,15 +261,15 @@ constexpr const wchar_t* kExpectedUpdateSigner = L"SignPath Foundation";
         if (!entry.is_regular_file()) continue;
         std::wstring name = entry.path().filename().wstring();
         std::wstring destPath = exeDir + L"\\" + name;
-        MoveFileW(entry.path().c_str(), destPath.c_str());
-        if (_wcsicmp(fs::path(name).extension().c_str(), L".exe") == 0 &&
-            name.find(L"VKey") != std::wstring::npos &&
-            name.find(L"Update") == std::wstring::npos) {
+        const bool restored = MoveFileExW(entry.path().c_str(), destPath.c_str(), MOVEFILE_REPLACE_EXISTING) != FALSE;
+        if (restored && (_wcsicmp(name.c_str(), L"VKey.exe") == 0 ||
+                         _wcsicmp(name.c_str(), L"VKeyClassic.exe") == 0)) {
             restoredExePath = destPath;
         }
     }
 
     std::wstring markerPath = exeDir + L"\\_update_failed";
+    DeleteFileW((exeDir + L"\\_update_succeeded").c_str());
     HANDLE hMarker = CreateFileW(markerPath.c_str(), GENERIC_WRITE, 0, nullptr,
                                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hMarker != INVALID_HANDLE_VALUE) CloseHandle(hMarker);
@@ -317,6 +317,7 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
     std::wstring exeDir = GetExeDirectory();
     std::wstring currentExePath = GetExePath();
     std::wstring tempDir = exeDir + L"\\_update_temp";
+    DeleteFileW((exeDir + L"\\_update_succeeded").c_str());
 
     // Known-clean start: delete any stale .pending / marker from a prior
     // aborted update. Otherwise a rollback in this run + stale pending from
@@ -326,7 +327,11 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
     DeleteFileW((exeDir + L"\\" + TSF_DLL_PENDING_MARKER).c_str());
 
     // 1. Wait for all other VKey.exe processes to exit (120s timeout)
-    WaitForOtherProcesses(120000);
+    if (!WaitForOtherProcesses(120000)) {
+        // Do not move live binaries after a failed handover.
+        std::ofstream(std::filesystem::path(exeDir) / kUpdateFailedMarker);
+        ExitProcess(1);
+    }
 
     // 2. Move ALL .exe and .dll files to _old_version/ folder
     // This handles sciter.dll, TSF DLLs, and the main EXE regardless of name.
@@ -407,7 +412,9 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
         }
 
         // 5b. Copy remaining new files to exe directory.
-        CopyDirectoryContents(sourceDir, exeDir);
+        if (!CopyDirectoryContents(sourceDir, exeDir)) {
+            RollbackRestoreAndExit(exeDir, oldVersionDir);
+        }
 
         // 6. Find the main executable to launch
         // Prefer "VKey.exe", then "VKeyClassic.exe"
@@ -420,22 +427,8 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
             }
         }
 
-        // Fallback: find any EXE that looks like the main app
-        if (finalExePath.empty()) {
-            for (const auto& entry : fs::directory_iterator(exeDir)) {
-                if (!entry.is_regular_file()) continue;
-                if (_wcsicmp(entry.path().extension().c_str(), L".exe") == 0) {
-                    std::wstring name = entry.path().filename().wstring();
-                    if (name.find(L"VKey") != std::wstring::npos) {
-                        // Skip updater if it's named VKeyUpdate.exe
-                        if (name.find(L"Update") == std::wstring::npos) {
-                            finalExePath = entry.path().wstring();
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        // Never mistake a watchdog/browser companion for the main application.
+        if (finalExePath.empty()) RollbackRestoreAndExit(exeDir, oldVersionDir);
     }
 
     // 7. Clean up temp files
@@ -446,7 +439,19 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
         fs::remove_all(tempDir, ec);
     }
 
-    // 8. Launch new executable
+    // 8. Bind the success receipt to the executable actually installed. Startup
+    // consumes this only if that exact EXE is running; debris cannot imply success.
+    const std::string installedHash = ComputeFileSha256(finalExePath);
+    if (installedHash.empty()) RollbackRestoreAndExit(exeDir, oldVersionDir);
+    {
+        std::ofstream receipt(std::filesystem::path(exeDir) / kUpdateSucceededMarker);
+        receipt << installedHash;
+        receipt.close();
+        if (!receipt) RollbackRestoreAndExit(exeDir, oldVersionDir);
+    }
+    DeleteFileW((exeDir + L"\\_update_failed").c_str());
+
+    // Launch new executable
     if (!finalExePath.empty()) {
         STARTUPINFOW si = { sizeof(si) };
         PROCESS_INFORMATION pi = {};
@@ -462,6 +467,8 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
                                0, nullptr, exeDir.c_str(), &si, &pi)) {
                 CloseHandle(pi.hThread);
                 CloseHandle(pi.hProcess);
+            } else {
+                RollbackRestoreAndExit(exeDir, oldVersionDir);
             }
         } else {
             CloseHandle(pi.hThread);
@@ -471,6 +478,18 @@ std::wstring MakeParkedDllTimestamp(const wchar_t* extraSuffix) noexcept {
 
     // 9. Exit updater
     ExitProcess(0);
+}
+
+UpdateOutcome ConsumeInstalledUpdateOutcome() noexcept {
+    try {
+        const auto directory = std::filesystem::path(GetExeDirectory());
+        std::error_code ec;
+        const auto hash = std::filesystem::exists(directory / kUpdateSucceededMarker, ec)
+            ? ComputeFileSha256(GetExePath()) : std::string{};
+        return ConsumeUpdateOutcome(directory, hash);
+    } catch (...) {
+        return UpdateOutcome::None;
+    }
 }
 
 bool CleanupOldUpdateFiles() noexcept {

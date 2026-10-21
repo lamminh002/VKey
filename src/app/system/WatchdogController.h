@@ -20,7 +20,7 @@ struct SystemConfig;  // forward decl — definition in core/SystemConfig.h
 class WatchdogController {
 public:
     WatchdogController() = default;
-    ~WatchdogController() = default;
+    ~WatchdogController();
 
     WatchdogController(const WatchdogController&) = delete;
     WatchdogController& operator=(const WatchdogController&) = delete;
@@ -47,11 +47,12 @@ public:
     }
 
 private:
-    [[nodiscard]] static bool LaunchWatchdogProcess() noexcept;
+    [[nodiscard]] static bool LaunchWatchdogProcess(HANDLE* processHandle = nullptr) noexcept;
     static void KillWatchdogProcess() noexcept;
 
     HeartbeatPublisher heartbeat_;
     std::atomic<bool> enabled_{false};
+    HANDLE watchdogProcess_ = nullptr;
 };
 
 }  // namespace NextKey

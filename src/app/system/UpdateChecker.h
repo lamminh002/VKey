@@ -43,9 +43,9 @@ public:
     /// Parse version string (e.g. "v1.2.3-beta") into packed format (major<<16 | minor<<8 | patch)
     [[nodiscard]] static uint32_t ParseVersion(const std::wstring& versionStr) noexcept;
 
-    /// Show TaskDialog with "Update now" / "Skip" buttons + changelog link
-    /// Returns true if user clicked "Update now"
-    [[nodiscard]] static bool ShowUpdateDialog(HWND parent, const UpdateInfo& info);
+    /// Show release information and open the manual download page on request.
+    /// Unsigned releases cannot pass the legacy installer's Authenticode gate.
+    static void ShowUpdateDialog(HWND parent, const UpdateInfo& info);
 
     /// Show "You're on the latest version" message
     static void ShowUpToDateMessage(HWND parent);

@@ -466,12 +466,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     // returned above. Result published into SharedState flags after Create().
     PendingDllState pendingDllState = ApplyPendingDllUpdate();
 
-    // Clean up leftover files from a previous update.
-    // If files were cleaned up, it means we just finished an update.
-    bool updateJustCompleted = CleanupOldUpdateFiles();
-    if (updateJustCompleted) {
-        NEXTKEY_LOG(L"Update completed successfully, old files cleaned up");
-    }
+    // A rollback receipt overrides success. Backup cleanup is housekeeping and
+    // must never be used as evidence that installation succeeded.
+    const auto updateOutcome = ConsumeInstalledUpdateOutcome();
+    const bool updateJustFailed = updateOutcome == UpdateOutcome::Failed;
+    const bool updateJustCompleted = updateOutcome == UpdateOutcome::Succeeded;
+    (void)CleanupOldUpdateFiles();
 
     // Ensure startup registration is intact (never prompts UAC).
     // If admin task was lost, falls back to registry and syncs config.
@@ -487,20 +487,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     g_watchdog.Init(systemConfig);
     g_browserExtension.Init(systemConfig);
 
-    // Check for update failure marker (installer failed and relaunched us)
-    bool updateJustFailed = false;
-    {
-        wchar_t exePath[MAX_PATH] = {};
-        GetModuleFileNameW(nullptr, exePath, MAX_PATH);
-        std::wstring exeDir(exePath);
-        auto pos = exeDir.find_last_of(L"\\/");
-        if (pos != std::wstring::npos) exeDir = exeDir.substr(0, pos);
-        std::wstring markerPath = exeDir + L"\\_update_failed";
-        if (DeleteFileW(markerPath.c_str())) {
-            updateJustFailed = true;
-            NEXTKEY_LOG(L"Update failed marker found and cleaned up");
-        }
-    }
 
 #ifdef VKEY_HOOK_ENGINE
     // ═══════════════════════════════════════════════════════════

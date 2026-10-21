@@ -43,6 +43,8 @@
 
 > [!WARNING]
 > **Cả Sciter và Classic v4.3 đều phát hành chưa ký Authenticode và phải cập nhật thủ công.** SignPath không chấp thuận ký bản tiêu chuẩn vì Sciter là thành phần mã nguồn đóng. Phương án chỉ ký bản Classic đang chờ phê duyệt lại; Classic vẫn được phát hành chưa ký trong thời gian chờ. Windows SmartScreen hoặc phần mềm diệt virus có thể cảnh báo, chặn chạy hoặc cách ly file. Xem [thông báo ký số](#ký-số-và-cập-nhật-thủ-công) và [release note](RELEASE_NOTES.md).
+>
+> **v4.3.0 đã được dựng lại ngày 21/10/2026** để sửa báo sai kết quả cập nhật, watchdog tự mở lại sau khi Thoát và lỗi tải chữ ký engine. Nếu đã tải v4.3.0 trước đó, hãy tải lại ZIP và cài thủ công. Tắt watchdog trong bản cũ trước khi thoát; nếu đang lặp khởi động lại, kết thúc cả `VKeyWatchdog.exe` và `VKey.exe` trong Task Manager.
 
 ## Giới thiệu
 
@@ -334,6 +336,8 @@ winget install PhatMT97.VKey.Classic
 
 > [!WARNING]
 > **Code signing and manual updates:** **Both Sciter and Classic v4.3 are released unsigned.** SignPath declined signing the standard edition because Sciter is a closed-source component. No package is being submitted to SignPath for this release. The proposal to sign only the three C++-only Classic binaries (`VKeyClassic.exe`, `VKeyTSF.dll`, and `VKeyWatchdog.exe`) is awaiting renewed approval; Classic is released unsigned alongside Sciter while approval is pending.
+>
+> **v4.3.0 was rebuilt on 2026-10-21** to fix incorrect update results, watchdog restarts after Quit, and engine signature downloads. If you downloaded the earlier v4.3.0 build, download the ZIP again and install manually. Disable the old watchdog before exiting; if it is already restarting VKey repeatedly, end both `VKeyWatchdog.exe` and `VKey.exe` in Task Manager.
 >
 > Windows SmartScreen or antivirus software may warn, block execution, or quarantine files. **Automatic installation of unsigned updates, including v4.2 → v4.3, does not work** because the updater requires a valid SignPath Foundation Authenticode signature. Download `VKey.zip` / `VKey-x64.zip` (Sciter) or `VKeyClassic.zip` / `VKeyClassic-x64.zip` (Classic) from the official [Releases](https://github.com/phatMT97/VKey/releases), verify its attestation, exit VKey, extract to a separate folder, and run the new `VKey.exe` or `VKeyClassic.exe`. Keep the two editions in separate folders. For Classic attestation verification, replace `VKey.zip` with `VKeyClassic.zip` in the command above. Sigstore attestations verify provenance but do not replace Authenticode or remove SmartScreen warnings. Releases v4.0–v4.2 were Authenticode-signed. VirusTotal reports for both editions and the optional engine DLL, including detection counts and scan times, are linked in the [v4.3.0 release notes](https://github.com/phatMT97/VKey/releases/tag/v4.3.0).
 

@@ -102,7 +102,6 @@ private:
 
     // Update helpers
     void startUpdateCheck();            // Check for updates with progress dialog
-    void startUpdate(const UpdateInfo& info);  // Download + launch updater + exit
     void setUpdateButtonEnabled(bool enabled);
 
     // Subclass procedure for window dragging and close

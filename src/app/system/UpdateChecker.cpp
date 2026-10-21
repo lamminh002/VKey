@@ -17,6 +17,7 @@
 #include <ShlObj.h>
 #include <Shlwapi.h>
 #include <fstream>
+#include <filesystem>
 #include <sstream>
 #include <algorithm>
 #include <exception>
@@ -83,7 +84,7 @@ std::string UpdateChecker::DownloadToString(const std::wstring& url) noexcept {
         }
 
         // Read the temp file
-        std::ifstream file(tempFile, std::ios::binary);
+        std::ifstream file(std::filesystem::path(tempFile), std::ios::binary);
         if (!file.is_open()) {
             DeleteFileW(tempFile.c_str());
             return {};
@@ -245,9 +246,9 @@ bool UpdateChecker::DownloadFile(const std::wstring& url, const std::wstring& lo
     return SUCCEEDED(hr);
 }
 
-bool UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
+void UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
     // Format the content string with version
-    wchar_t content[256];
+    wchar_t content[1024];
     swprintf_s(content, S(StringId::UPDATE_AVAILABLE_BODY), info.version.c_str());
 
     // Build changelog link text
@@ -296,9 +297,16 @@ bool UpdateChecker::ShowUpdateDialog(HWND parent, const UpdateInfo& info) {
 
     int button = 0;
     HRESULT hr = TaskDialogIndirect(&tdc, &button, nullptr, nullptr);
-    if (FAILED(hr)) return false;
+    if (FAILED(hr) || button != 1001) return;
 
-    return button == 1001;
+    // Keep VKey running while the user reviews/downloads the unsigned release.
+    // Do not weaken the existing Authenticode installer verification.
+    constexpr auto releasePage = L"https://github.com/phatMT97/VKey/releases/latest";
+    if (reinterpret_cast<INT_PTR>(ShellExecuteW(parent, L"open", releasePage,
+                                               nullptr, nullptr, SW_SHOW)) <= 32) {
+        ShowTopmostTaskDialog(parent, L"VKey", S(StringId::UPDATE_TITLE),
+                             releasePage, TDCBF_OK_BUTTON, TD_WARNING_ICON);
+    }
 }
 
 void UpdateChecker::ShowUpToDateMessage(HWND parent) {
